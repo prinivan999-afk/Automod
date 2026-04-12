@@ -2,16 +2,18 @@ import { Switch, Route, Router as WouterRouter } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import NotFound from "@/pages/not-found";
 import Layout from "@/components/layout";
-import Home from "@/pages/home";
-import ZayavkiList from "@/pages/zayavki";
-import ZayavkiDetail from "@/pages/zayavki-detail";
-import Tarif from "@/pages/tarif";
-import Analitika from "@/pages/analitika";
-import Profil from "@/pages/profil";
-import Raspisanie from "@/pages/raspisanie";
-import { useEffect } from "react";
+import { useEffect, lazy, Suspense } from "react";
+import { Skeleton } from "@/components/ui/skeleton";
+
+const NotFound = lazy(() => import("@/pages/not-found"));
+const Home = lazy(() => import("@/pages/home"));
+const ZayavkiList = lazy(() => import("@/pages/zayavki"));
+const ZayavkiDetail = lazy(() => import("@/pages/zayavki-detail"));
+const Tarif = lazy(() => import("@/pages/tarif"));
+const Analitika = lazy(() => import("@/pages/analitika"));
+const Profil = lazy(() => import("@/pages/profil"));
+const Raspisanie = lazy(() => import("@/pages/raspisanie"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -25,16 +27,18 @@ const queryClient = new QueryClient({
 function Router() {
   return (
     <Layout>
-      <Switch>
-        <Route path="/" component={Home} />
-        <Route path="/zayavki" component={ZayavkiList} />
-        <Route path="/zayavki/:id" component={ZayavkiDetail} />
-        <Route path="/tarif" component={Tarif} />
-        <Route path="/analitika" component={Analitika} />
-        <Route path="/profil" component={Profil} />
-        <Route path="/raspisanie" component={Raspisanie} />
-        <Route component={NotFound} />
-      </Switch>
+      <Suspense fallback={<div className="space-y-4"><Skeleton className="h-32 w-full" /><Skeleton className="h-64 w-full" /></div>}>
+        <Switch>
+          <Route path="/" component={Home} />
+          <Route path="/zayavki" component={ZayavkiList} />
+          <Route path="/zayavki/:id" component={ZayavkiDetail} />
+          <Route path="/tarif" component={Tarif} />
+          <Route path="/analitika" component={Analitika} />
+          <Route path="/profil" component={Profil} />
+          <Route path="/raspisanie" component={Raspisanie} />
+          <Route component={NotFound} />
+        </Switch>
+      </Suspense>
     </Layout>
   );
 }
