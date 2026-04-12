@@ -291,109 +291,122 @@ export default function Profil() {
             Ваш профиль
           </CardTitle>
           <CardDescription>
-            Укажите ваш Telegram-юзернейм. Покупатели будут писать боту, указывая ваш @username.
+            {profile ? "Ваш Telegram-аккаунт привязан к CRM" : "Укажите ваш Telegram-юзернейм для начала работы"}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="username">Ваш Telegram-юзернейм</Label>
-            <div className="flex gap-2">
-              <div className="relative flex-1">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">@</span>
-                <Input
-                  id="username"
-                  placeholder="username"
-                  value={telegramUsername}
-                  onChange={(e) => setTelegramUsername(e.target.value.replace(/^@/, ""))}
-                  className="pl-7"
-                />
-              </div>
-              <Button onClick={handleRegister} disabled={registerMutation.isPending}>
-                {registerMutation.isPending ? "Сохраняем..." : "Сохранить"}
-              </Button>
-            </div>
-          </div>
-
-          {/* Recovery block — shown when username is taken or manually opened */}
-          {showRecovery ? (
-            <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 space-y-3">
-              <div>
-                <p className="text-sm font-semibold text-amber-400 mb-1">Восстановление доступа</p>
-                <p className="text-xs text-muted-foreground">
-                  Если это ваш аккаунт — отправьте боту <code className="bg-muted px-1 rounded">/mytoken</code> из Telegram и вставьте полученный токен:
-                </p>
-              </div>
-              <div className="flex gap-2">
-                <Input
-                  placeholder="Вставьте API-токен из бота"
-                  value={recoveryToken}
-                  onChange={(e) => setRecoveryToken(e.target.value)}
-                  className="font-mono text-xs"
-                />
-                <Button size="sm" onClick={handleRecoverByToken}>Войти</Button>
-              </div>
-              <button
-                className="text-xs text-muted-foreground hover:text-foreground underline"
-                onClick={() => setShowRecovery(false)}
-              >
-                Отмена
-              </button>
-            </div>
-          ) : (
-            <button
-              className="text-xs text-muted-foreground hover:text-foreground underline"
-              onClick={() => setShowRecovery(true)}
-            >
-              Уже есть аккаунт? Войти по токену
-            </button>
-          )}
-
-          {profile && (
-            <div className="rounded-lg border bg-muted/20 p-4 space-y-3">
-              <div className="flex items-center justify-between gap-3">
-                <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground">Telegram</p>
-                  <p className="font-medium">@{profile.telegramUsername}</p>
+          {!profile ? (
+            <>
+              {/* Registration form — only for new users */}
+              <div className="space-y-2">
+                <Label htmlFor="username">Ваш Telegram-юзернейм</Label>
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">@</span>
+                    <Input
+                      id="username"
+                      placeholder="username"
+                      value={telegramUsername}
+                      onChange={(e) => setTelegramUsername(e.target.value.replace(/^@/, ""))}
+                      className="pl-7"
+                    />
+                  </div>
+                  <Button onClick={handleRegister} disabled={registerMutation.isPending}>
+                    {registerMutation.isPending ? "Создаём..." : "Создать аккаунт"}
+                  </Button>
                 </div>
-                {isVerified ? (
-                  <Badge className="bg-green-500/15 text-green-500 border-green-500/30 gap-1 border">
-                    <ShieldCheck className="w-3 h-3" />
-                    Верифицирован
-                  </Badge>
-                ) : (
-                  <Badge variant="outline" className="text-yellow-500 border-yellow-500/30 gap-1">
-                    <ShieldAlert className="w-3 h-3" />
-                    Не верифицирован
-                  </Badge>
+              </div>
+
+              {/* Recovery block */}
+              {showRecovery ? (
+                <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 space-y-3">
+                  <div>
+                    <p className="text-sm font-semibold text-amber-400 mb-1">Восстановление доступа</p>
+                    <p className="text-xs text-muted-foreground">
+                      Отправьте боту <code className="bg-muted px-1 rounded">/mytoken</code> из Telegram и вставьте полученный токен:
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Вставьте API-токен из бота"
+                      value={recoveryToken}
+                      onChange={(e) => setRecoveryToken(e.target.value)}
+                      className="font-mono text-xs"
+                    />
+                    <Button size="sm" onClick={handleRecoverByToken}>Войти</Button>
+                  </div>
+                  <button
+                    className="text-xs text-muted-foreground hover:text-foreground underline"
+                    onClick={() => setShowRecovery(false)}
+                  >
+                    Отмена
+                  </button>
+                </div>
+              ) : (
+                <button
+                  className="text-xs text-muted-foreground hover:text-foreground underline"
+                  onClick={() => setShowRecovery(true)}
+                >
+                  Уже есть аккаунт? Войти по токену
+                </button>
+              )}
+            </>
+          ) : (
+            /* Profile info — for already registered users, no form */
+            <div className="space-y-3">
+              <div className="rounded-lg border bg-muted/20 p-4 space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="space-y-1">
+                    <p className="text-xs text-muted-foreground">Telegram</p>
+                    <p className="font-medium">@{profile.telegramUsername}</p>
+                  </div>
+                  {isVerified ? (
+                    <Badge className="bg-green-500/15 text-green-500 border-green-500/30 gap-1 border">
+                      <ShieldCheck className="w-3 h-3" />
+                      Верифицирован
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-yellow-500 border-yellow-500/30 gap-1">
+                      <ShieldAlert className="w-3 h-3" />
+                      Не верифицирован
+                    </Badge>
+                  )}
+                </div>
+
+                {!isVerified && (
+                  <div className="rounded-md border border-yellow-500/20 bg-yellow-500/5 p-3 text-sm text-yellow-600 dark:text-yellow-400 space-y-2">
+                    <p className="font-medium">Требуется верификация</p>
+                    <p className="text-xs">
+                      Пока username не верифицирован, покупатели не смогут найти вас. Отправьте команду{" "}
+                      <code className="bg-black/10 dark:bg-white/10 px-1 rounded">/token</code> боту.
+                    </p>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="w-full border-yellow-500/30 text-yellow-600 dark:text-yellow-400 hover:bg-yellow-500/10"
+                      onClick={handleRefreshStatus}
+                      disabled={isRefreshing}
+                    >
+                      <RefreshCw className={`w-3 h-3 mr-2 ${isRefreshing ? "animate-spin" : ""}`} />
+                      {isRefreshing ? "Проверяем..." : "Я отправил команду — проверить статус"}
+                    </Button>
+                  </div>
+                )}
+
+                {isVerified && (
+                  <div className="flex items-center gap-2 text-sm text-green-500">
+                    <Check className="w-4 h-4" />
+                    Telegram подтверждён — покупатели могут вас найти
+                  </div>
                 )}
               </div>
 
-              {!isVerified && (
-                <div className="rounded-md border border-yellow-500/20 bg-yellow-500/5 p-3 text-sm text-yellow-600 dark:text-yellow-400 space-y-2">
-                  <p className="font-medium">Требуется верификация</p>
-                  <p className="text-xs">
-                    Пока username не верифицирован, покупатели не смогут найти вас. Отправьте команду{" "}
-                    <code className="bg-black/10 dark:bg-white/10 px-1 rounded">/token</code> боту.
-                  </p>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="w-full border-yellow-500/30 text-yellow-600 dark:text-yellow-400 hover:bg-yellow-500/10"
-                    onClick={handleRefreshStatus}
-                    disabled={isRefreshing}
-                  >
-                    <RefreshCw className={`w-3 h-3 mr-2 ${isRefreshing ? "animate-spin" : ""}`} />
-                    {isRefreshing ? "Проверяем..." : "Я отправил команду — проверить статус"}
-                  </Button>
-                </div>
-              )}
-
-              {isVerified && (
-                <div className="flex items-center gap-2 text-sm text-green-500">
-                  <Check className="w-4 h-4" />
-                  Telegram подтверждён — покупатели могут вас найти
-                </div>
-              )}
+              <button
+                className="text-xs text-muted-foreground hover:text-foreground underline"
+                onClick={() => { localStorage.removeItem("crm_profile"); setProfile(null); }}
+              >
+                Выйти из аккаунта
+              </button>
             </div>
           )}
         </CardContent>
