@@ -3,17 +3,19 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: CRM API for business lead management from Telegram, Instagram and MAX
+  description: CRM API для управления заявками бизнеса через Telegram, Instagram и MAX
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
-    description: Health operations
+    description: Проверка состояния сервера
   - name: leads
-    description: Lead/request management
+    description: Управление заявками
   - name: analytics
-    description: Analytics and statistics
+    description: Аналитика и статистика
+  - name: tariff
+    description: Анализ тарифов и прайс-листов через Gemini AI
 paths:
   /healthz:
     get:
@@ -33,7 +35,7 @@ paths:
     get:
       operationId: listLeads
       tags: [leads]
-      summary: List all leads
+      summary: Список всех заявок
       parameters:
         - name: status
           in: query
@@ -59,7 +61,7 @@ paths:
             type: string
       responses:
         "200":
-          description: List of leads
+          description: Список заявок
           content:
             application/json:
               schema:
@@ -69,7 +71,7 @@ paths:
     post:
       operationId: createLead
       tags: [leads]
-      summary: Create a new lead (from bot)
+      summary: Создать новую заявку (от бота)
       requestBody:
         required: true
         content:
@@ -78,13 +80,13 @@ paths:
               $ref: "#/components/schemas/CreateLeadBody"
       responses:
         "201":
-          description: Lead created
+          description: Заявка создана
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Lead"
         "400":
-          description: Validation error
+          description: Ошибка валидации
           content:
             application/json:
               schema:
@@ -94,7 +96,7 @@ paths:
     get:
       operationId: getLead
       tags: [leads]
-      summary: Get a single lead
+      summary: Получить заявку
       parameters:
         - name: id
           in: path
@@ -103,13 +105,13 @@ paths:
             type: integer
       responses:
         "200":
-          description: Lead details
+          description: Детали заявки
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Lead"
         "404":
-          description: Not found
+          description: Не найдено
           content:
             application/json:
               schema:
@@ -117,7 +119,7 @@ paths:
     patch:
       operationId: updateLead
       tags: [leads]
-      summary: Update a lead
+      summary: Обновить заявку
       parameters:
         - name: id
           in: path
@@ -132,13 +134,13 @@ paths:
               $ref: "#/components/schemas/UpdateLeadBody"
       responses:
         "200":
-          description: Updated lead
+          description: Обновлённая заявка
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Lead"
         "404":
-          description: Not found
+          description: Не найдено
           content:
             application/json:
               schema:
@@ -146,7 +148,7 @@ paths:
     delete:
       operationId: deleteLead
       tags: [leads]
-      summary: Delete a lead
+      summary: Удалить заявку
       parameters:
         - name: id
           in: path
@@ -155,9 +157,9 @@ paths:
             type: integer
       responses:
         "204":
-          description: Deleted
+          description: Удалено
         "404":
-          description: Not found
+          description: Не найдено
           content:
             application/json:
               schema:
@@ -167,7 +169,7 @@ paths:
     patch:
       operationId: updateLeadStatus
       tags: [leads]
-      summary: Update lead status
+      summary: Изменить статус заявки
       parameters:
         - name: id
           in: path
@@ -182,13 +184,13 @@ paths:
               $ref: "#/components/schemas/UpdateLeadStatusBody"
       responses:
         "200":
-          description: Updated lead
+          description: Обновлённая заявка
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Lead"
         "404":
-          description: Not found
+          description: Не найдено
           content:
             application/json:
               schema:
@@ -198,10 +200,10 @@ paths:
     get:
       operationId: getAnalyticsSummary
       tags: [analytics]
-      summary: Get analytics summary
+      summary: Сводка аналитики
       responses:
         "200":
-          description: Analytics summary
+          description: Сводка аналитики
           content:
             application/json:
               schema:
@@ -211,10 +213,10 @@ paths:
     get:
       operationId: getLeadsByPlatform
       tags: [analytics]
-      summary: Get lead counts grouped by platform
+      summary: Заявки по платформам
       responses:
         "200":
-          description: Leads by platform
+          description: Заявки по платформам
           content:
             application/json:
               schema:
@@ -226,10 +228,10 @@ paths:
     get:
       operationId: getLeadsByStatus
       tags: [analytics]
-      summary: Get lead counts grouped by status
+      summary: Заявки по статусам
       responses:
         "200":
-          description: Leads by status
+          description: Заявки по статусам
           content:
             application/json:
               schema:
@@ -241,16 +243,78 @@ paths:
     get:
       operationId: getRecentActivity
       tags: [analytics]
-      summary: Get recent lead activity
+      summary: Последние заявки
       responses:
         "200":
-          description: Recent leads
+          description: Последние заявки
           content:
             application/json:
               schema:
                 type: array
                 items:
                   $ref: "#/components/schemas/Lead"
+
+  /tariff/analyze:
+    post:
+      operationId: analyzeTariff
+      tags: [tariff]
+      summary: Анализ прайс-листа через Gemini AI
+      description: Принимает текст с описанием товаров и ценами, возвращает структурированный прайс-лист
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnalyzeTariffBody"
+      responses:
+        "200":
+          description: Структурированный прайс-лист
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalyzeTariffResponse"
+        "400":
+          description: Ошибка валидации
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Ошибка AI анализа
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /tariff/settings:
+    get:
+      operationId: getTariffSettings
+      tags: [tariff]
+      summary: Получить сохранённый тариф
+      responses:
+        "200":
+          description: Тариф
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TariffSettings"
+    post:
+      operationId: saveTariffSettings
+      tags: [tariff]
+      summary: Сохранить тариф
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SaveTariffSettingsBody"
+      responses:
+        "200":
+          description: Тариф сохранён
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TariffSettings"
 
 components:
   schemas:
@@ -429,3 +493,95 @@ components:
       required:
         - status
         - count
+
+    AnalyzeTariffBody:
+      type: object
+      properties:
+        rawText:
+          type: string
+          description: Произвольный текст с описанием товаров/услуг и ценами
+        businessType:
+          type: ["string", "null"]
+          description: Тип бизнеса (например, кондитерская, фотограф)
+      required:
+        - rawText
+
+    TariffItem:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        price:
+          type: string
+        unit:
+          type: ["string", "null"]
+        category:
+          type: ["string", "null"]
+      required:
+        - name
+        - price
+
+    AnalyzeTariffResponse:
+      type: object
+      properties:
+        businessType:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/TariffItem"
+        summary:
+          type: string
+        botPrompt:
+          type: string
+          description: Готовый промпт для бота, который будет общаться с клиентами
+      required:
+        - businessType
+        - items
+        - summary
+        - botPrompt
+
+    TariffSettings:
+      type: object
+      properties:
+        id:
+          type: integer
+        rawText:
+          type: string
+        businessType:
+          type: string
+        structuredData:
+          type: string
+        botPrompt:
+          type: string
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required:
+        - id
+        - rawText
+        - businessType
+        - structuredData
+        - botPrompt
+        - createdAt
+        - updatedAt
+
+    SaveTariffSettingsBody:
+      type: object
+      properties:
+        rawText:
+          type: string
+        businessType:
+          type: string
+        structuredData:
+          type: string
+        botPrompt:
+          type: string
+      required:
+        - rawText
+        - businessType
+        - structuredData
+        - botPrompt

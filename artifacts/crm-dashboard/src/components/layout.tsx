@@ -1,13 +1,14 @@
 import { Link, useLocation } from "wouter";
-import { LayoutDashboard, Users, PlusCircle, Activity } from "lucide-react";
+import { LayoutDashboard, Users, Activity, FileText } from "lucide-react";
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
 
   const navItems = [
-    { href: "/", label: "Dashboard", icon: LayoutDashboard },
-    { href: "/leads", label: "All Leads", icon: Users },
-    { href: "/add-lead", label: "Add Lead", icon: PlusCircle },
+    { href: "/", label: "Главная", icon: LayoutDashboard },
+    { href: "/zayavki", label: "Заявки", icon: Users },
+    { href: "/tarif", label: "Тариф", icon: FileText },
+    { href: "/analitika", label: "Аналитика", icon: Activity },
   ];
 
   return (
@@ -42,7 +43,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </nav>
         
         <div className="p-6 border-t border-sidebar-border text-sm text-sidebar-foreground/50">
-          Command Center v1.0
+          LeadFlow v1.0
         </div>
       </aside>
 

@@ -3,11 +3,12 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
-import Dashboard from "@/pages/dashboard";
-import LeadsList from "@/pages/leads";
-import LeadDetail from "@/pages/lead-detail";
-import AddLead from "@/pages/add-lead";
 import Layout from "@/components/layout";
+import Home from "@/pages/home";
+import ZayavkiList from "@/pages/zayavki";
+import ZayavkiDetail from "@/pages/zayavki-detail";
+import Tarif from "@/pages/tarif";
+import Analitika from "@/pages/analitika";
 import { useEffect } from "react";
 
 const queryClient = new QueryClient({
@@ -23,10 +24,11 @@ function Router() {
   return (
     <Layout>
       <Switch>
-        <Route path="/" component={Dashboard} />
-        <Route path="/leads" component={LeadsList} />
-        <Route path="/add-lead" component={AddLead} />
-        <Route path="/leads/:id" component={LeadDetail} />
+        <Route path="/" component={Home} />
+        <Route path="/zayavki" component={ZayavkiList} />
+        <Route path="/zayavki/:id" component={ZayavkiDetail} />
+        <Route path="/tarif" component={Tarif} />
+        <Route path="/analitika" component={Analitika} />
         <Route component={NotFound} />
       </Switch>
     </Layout>
