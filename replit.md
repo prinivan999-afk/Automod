@@ -20,6 +20,7 @@ Full-stack app: React + Vite frontend (crm-dashboard), Express 5 API server, Pos
 - **Validation**: Zod (`zod/v4`), `drizzle-zod`
 - **API codegen**: Orval (from OpenAPI spec)
 - **Build**: esbuild (CJS bundle)
+- **AI provider**: Gemini via Replit AI Integrations (`AI_INTEGRATIONS_GEMINI_BASE_URL`, `AI_INTEGRATIONS_GEMINI_API_KEY`)
 
 ## Key Features
 
@@ -62,3 +63,4 @@ POST /api/leads
 - `artifacts/api-server/src/routes/leads.ts` — Lead CRUD + analytics routes
 - `lib/db/src/schema/leads.ts` — Leads table schema
 - `lib/api-spec/openapi.yaml` — API spec (source of truth)
+- `lib/integrations-gemini-ai/` — Gemini client and helper modules
