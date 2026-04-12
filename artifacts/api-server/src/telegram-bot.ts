@@ -67,21 +67,62 @@ async function getSellerByUsername(username: string) {
   return user ?? null;
 }
 
-async function getBotPrompt(): Promise<string> {
-  const [settings] = await db
-    .select()
-    .from(tariffSettingsTable)
-    .orderBy(tariffSettingsTable.updatedAt)
-    .limit(1);
+async function getSellerSettings(sellerId: number | null | undefined): Promise<{ botPrompt: string; priceList: string | null }> {
+  let settings = null;
 
-  if (settings?.botPrompt) {
-    return settings.botPrompt;
+  if (sellerId) {
+    const [byUser] = await db
+      .select()
+      .from(tariffSettingsTable)
+      .where(eq(tariffSettingsTable.userId, sellerId))
+      .orderBy(tariffSettingsTable.updatedAt)
+      .limit(1);
+    settings = byUser ?? null;
   }
 
-  return `Ты — вежливый AI-помощник бизнеса в Telegram.
+  if (!settings) {
+    const [any] = await db
+      .select()
+      .from(tariffSettingsTable)
+      .orderBy(tariffSettingsTable.updatedAt)
+      .limit(1);
+    settings = any ?? null;
+  }
+
+  const defaultPrompt = `Ты — вежливый AI-помощник бизнеса в Telegram.
 Отвечай на вопросы клиентов, уточняй детали (что нужно, количество, сроки, пожелания).
 Общайся по-русски, будь приветлив и профессионален.
 Когда клиент определился — скажи, что его заявка принята и менеджер свяжется с ним.`;
+
+  const botPrompt = settings?.botPrompt ?? defaultPrompt;
+
+  let priceList: string | null = null;
+  if (settings?.structuredData) {
+    try {
+      const items = JSON.parse(settings.structuredData) as Array<{
+        name: string;
+        description?: string | null;
+        price: string;
+        unit?: string | null;
+        category?: string | null;
+      }>;
+      if (items.length > 0) {
+        priceList = items
+          .map((item) => {
+            const parts = [`• ${item.name}`];
+            if (item.category) parts[0] = `[${item.category}] ${parts[0]}`;
+            parts.push(`  Цена: ${item.price}${item.unit ? ` / ${item.unit}` : ""}`);
+            if (item.description) parts.push(`  ${item.description}`);
+            return parts.join("\n");
+          })
+          .join("\n");
+      }
+    } catch {
+      priceList = settings.structuredData;
+    }
+  }
+
+  return { botPrompt, priceList };
 }
 
 function generateTimeSlots(start: string, end: string, slotMinutes: number): string[] {
@@ -184,7 +225,8 @@ async function parseDateFromText(text: string): Promise<string | null> {
 
 async function extractLeadFromConversation(
   messages: BotMessage[],
-  clientName: string
+  clientName: string,
+  priceList: string | null
 ): Promise<{
   service: string;
   details: string | null;
@@ -197,20 +239,25 @@ async function extractLeadFromConversation(
     .map((m) => `${m.role === "user" ? "Клиент" : "Бот"}: ${m.parts[0]?.text}`)
     .join("\n");
 
-  const extractPrompt = `Ты анализируешь переписку клиента с AI-ботом.
+  const priceListSection = priceList
+    ? `\nПрайс-лист продавца (используй ТОЧНЫЕ названия услуг из этого списка):\n"""\n${priceList}\n"""\n`
+    : "";
 
+  const extractPrompt = `Ты анализируешь переписку клиента с AI-ботом.
+${priceListSection}
 Переписка:
 """
 ${conversationText}
 """
 
-Извлеки информацию о заявке. Верни ТОЛЬКО JSON (без markdown):
+Извлеки информацию о заявке. ${priceList ? 'Поле "service" должно содержать ТОЧНОЕ название услуги из прайс-листа (если клиент выбрал что-то из него). Если услуга не из прайса — напиши кратко что хочет клиент.' : 'Поле "service" — что хочет клиент (кратко, 2-5 слов).'}
+Верни ТОЛЬКО JSON (без markdown):
 {
-  "service": "что хочет клиент (кратко, 2-5 слов)",
-  "details": "подробности или null",
+  "service": "точное название услуги из прайса или краткое описание (2-5 слов)",
+  "details": "подробности, пожелания клиента или null",
   "quantity": "количество или null",
   "deadline": "дата/срок или null",
-  "price": "цена если называлась или null",
+  "price": "цена из прайса если выбрана конкретная услуга, иначе цена если называлась или null",
   "status": "hot если клиент готов и выбрал время, warm если интересуется, cold если просто смотрит"
 }`;
 
@@ -375,7 +422,11 @@ export function startTelegramBot() {
         return;
       }
 
-      const botPrompt = await getBotPrompt();
+      const { botPrompt, priceList } = await getSellerSettings(seller.id);
+
+      const priceListIntro = priceList
+        ? `\n\nПрайс-лист товаров/услуг:\n${priceList}`
+        : "";
 
       const greetingResponse = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
@@ -384,7 +435,7 @@ export function startTelegramBot() {
             role: "user",
             parts: [
               {
-                text: `${botPrompt}\n\nПоздоровайся с клиентом. Скажи: "Здравствуйте! Я ваш дружелюбный AI-помощник." и спроси чем можешь помочь. Одно короткое сообщение.`,
+                text: `${botPrompt}${priceListIntro}\n\nПоздоровайся с клиентом. Скажи: "Здравствуйте! Я ваш дружелюбный AI-помощник." и спроси чем можешь помочь. Одно короткое сообщение.`,
               },
             ],
           },
@@ -431,11 +482,15 @@ export function startTelegramBot() {
       return;
     }
 
-    const botPrompt = await getBotPrompt();
+    const { botPrompt, priceList } = await getSellerSettings(conv.sellerId);
+
+    const systemPromptText = priceList
+      ? `${botPrompt}\n\nПрайс-лист товаров/услуг:\n${priceList}\n\nИспользуй ТОЛЬКО эти товары/услуги из прайса при ответах на вопросы о наличии, ценах и описаниях. Если клиент спрашивает о чём-то не из прайса — сообщи, что такого нет в ассортименте.`
+      : botPrompt;
 
     const contents = [
-      { role: "user" as const, parts: [{ text: botPrompt }] },
-      { role: "model" as const, parts: [{ text: "Понял, буду следовать инструкциям." }] },
+      { role: "user" as const, parts: [{ text: systemPromptText }] },
+      { role: "model" as const, parts: [{ text: "Понял, буду следовать инструкциям и работать только по прайс-листу." }] },
       ...messages,
     ];
 
@@ -472,7 +527,7 @@ export function startTelegramBot() {
         .where(eq(usersTable.id, conv.sellerId!))
         .limit(1);
 
-      const leadData = await extractLeadFromConversation(messages, clientName);
+      const leadData = await extractLeadFromConversation(messages, clientName, priceList);
 
       if (leadData) {
         let existingLead = conv.leadId
