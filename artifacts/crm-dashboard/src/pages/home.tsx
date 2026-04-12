@@ -1,47 +1,14 @@
 import { Link } from "wouter";
-import { useListLeads, useGetLeadsByPlatform } from "@workspace/api-client-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
-import { MessageCircle, ArrowRight, CheckCircle2, Send, ExternalLink, X } from "lucide-react";
-import { format } from "date-fns";
-import { ru } from "date-fns/locale";
+import { CheckCircle2, Send, ExternalLink, X, MessageCircle, BarChart2, CalendarDays, Settings } from "lucide-react";
 import { useState } from "react";
 
 const BOT_USERNAME = "AutoMind5_bot";
 const BOT_URL = `https://t.me/${BOT_USERNAME}`;
 
 export default function Home() {
-  const { data: leads, isLoading: leadsLoading } = useListLeads({ status: "hot" });
-  const { data: platforms, isLoading: platformsLoading } = useGetLeadsByPlatform();
   const [showTelegramGuide, setShowTelegramGuide] = useState(false);
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "hot":
-        return "bg-destructive text-destructive-foreground";
-      case "warm":
-        return "bg-amber-500 text-amber-950";
-      case "cold":
-        return "bg-muted text-muted-foreground";
-      default:
-        return "bg-muted text-muted-foreground";
-    }
-  };
-
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case "hot":
-        return "Горячий";
-      case "warm":
-        return "Тёплый";
-      case "cold":
-        return "Холодный";
-      default:
-        return "Неизвестно";
-    }
-  };
 
   return (
     <div className="space-y-8">
@@ -58,7 +25,7 @@ export default function Home() {
             <Button
               size="lg"
               className="font-semibold gap-2"
-              onClick={() => setShowTelegramGuide(true)}
+              onClick={() => setShowTelegramGuide((v) => !v)}
             >
               <Send className="w-4 h-4" />
               Подключить Telegram
@@ -121,11 +88,7 @@ export default function Home() {
           </div>
 
           <div className="flex flex-wrap gap-3">
-            <Button
-              asChild
-              size="lg"
-              className="gap-2 font-semibold"
-            >
+            <Button asChild size="lg" className="gap-2 font-semibold">
               <a href={BOT_URL} target="_blank" rel="noopener noreferrer">
                 <ExternalLink className="w-4 h-4" />
                 Открыть бота
@@ -138,123 +101,43 @@ export default function Home() {
         </section>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Connected Channels */}
-        <div className="col-span-1 space-y-6">
-          <h2 className="text-2xl font-bold tracking-tight">Активный канал</h2>
-          {platformsLoading ? (
-            <div className="space-y-4">
-              <Skeleton className="h-20 w-full" />
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {/* Telegram card — always shown */}
-              <Card className="bg-card border-blue-500/30">
-                <CardHeader className="p-4 pb-2 flex flex-row items-center justify-between space-y-0">
-                  <CardTitle className="text-base font-medium flex items-center gap-2">
-                    <MessageCircle className="w-5 h-5 text-blue-400" />
-                    Telegram
-                  </CardTitle>
-                  <Badge className="bg-blue-500/20 text-blue-400 border-0 text-xs">
-                    Активен
-                  </Badge>
-                </CardHeader>
-                <CardContent className="p-4 pt-0">
-                  <div className="text-2xl font-bold">
-                    {platforms?.find((p) => p.platform === "Telegram")?.count ?? 0}
-                  </div>
-                  <p className="text-xs text-muted-foreground">заявок через бота</p>
-                </CardContent>
-              </Card>
-
-              <button
-                onClick={() => setShowTelegramGuide(true)}
-                className="w-full text-left"
-              >
-                <Card className="bg-card hover:border-primary/50 transition-colors cursor-pointer border-dashed">
-                  <CardContent className="p-4 flex items-center gap-3 text-muted-foreground">
-                    <Send className="w-4 h-4 text-blue-400" />
-                    <span className="text-sm">Как подключить бота?</span>
-                    <ArrowRight className="w-4 h-4 ml-auto" />
-                  </CardContent>
-                </Card>
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Recent Hot Leads */}
-        <div className="col-span-1 md:col-span-2 space-y-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-2xl font-bold tracking-tight">Горячие заявки</h2>
-            <Button asChild variant="ghost" size="sm">
-              <Link href="/zayavki" className="flex items-center gap-2">
-                Все заявки <ArrowRight className="w-4 h-4" />
-              </Link>
-            </Button>
-          </div>
-
-          <Card className="overflow-hidden">
-            {leadsLoading ? (
-              <div className="p-6 space-y-4">
-                {[1, 2, 3].map((i) => (
-                  <Skeleton key={i} className="h-16 w-full" />
-                ))}
-              </div>
-            ) : leads && leads.length > 0 ? (
-              <div className="divide-y divide-border">
-                {leads.slice(0, 5).map((lead) => (
-                  <div key={lead.id} className="p-4 hover:bg-muted/50 transition-colors flex items-center justify-between">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <Link href={`/zayavki/${lead.id}`} className="font-semibold hover:underline">
-                          {lead.clientName}
-                        </Link>
-                        {lead.isPriority && (
-                          <Badge variant="outline" className="border-primary text-primary">
-                            Приоритет
-                          </Badge>
-                        )}
-                      </div>
-                      <div className="text-sm text-muted-foreground flex items-center gap-2">
-                        <MessageCircle className="w-4 h-4 text-blue-400" />
-                        <span>{lead.service}</span>
-                        <span>•</span>
-                        <span>{format(new Date(lead.createdAt), "d MMMM, HH:mm", { locale: ru })}</span>
-                      </div>
-                    </div>
-                    <Badge className={getStatusColor(lead.status)}>
-                      {getStatusText(lead.status)}
-                    </Badge>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="p-12 text-center text-muted-foreground flex flex-col items-center justify-center">
-                <CheckCircle2 className="w-12 h-12 mb-4 text-muted" />
-                <p className="text-lg font-medium">Заявок пока нет</p>
-                <p className="text-sm">Подключите бота — и новые заявки появятся здесь</p>
-              </div>
-            )}
-          </Card>
-        </div>
+      {/* Quick Nav Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {[
+          { href: "/zayavki", icon: MessageCircle, label: "Заявки", desc: "Все входящие заявки от клиентов", color: "text-blue-400" },
+          { href: "/analitika", icon: BarChart2, label: "Аналитика", desc: "Статистика и показатели бизнеса", color: "text-emerald-400" },
+          { href: "/raspisanie", icon: CalendarDays, label: "Расписание", desc: "Управление записями клиентов", color: "text-violet-400" },
+          { href: "/tarif", icon: Settings, label: "Тариф и бот", desc: "Настройка прайса и AI-бота", color: "text-amber-400" },
+        ].map(({ href, icon: Icon, label, desc, color }) => (
+          <Link key={href} href={href}>
+            <Card className="bg-card hover:border-primary/50 transition-colors cursor-pointer h-full">
+              <CardContent className="p-5 flex flex-col gap-3">
+                <Icon className={`w-6 h-6 ${color}`} />
+                <div>
+                  <p className="font-semibold">{label}</p>
+                  <p className="text-sm text-muted-foreground">{desc}</p>
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
+        ))}
       </div>
 
       {/* Why Choose Us */}
-      <section className="pt-8 border-t border-border">
-        <h2 className="text-2xl font-bold tracking-tight mb-8 text-center">Почему AutoMind</h2>
+      <section className="pt-4 border-t border-border">
+        <h2 className="text-2xl font-bold tracking-tight mb-6 text-center">Почему AutoMind</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {[
-            { title: "AI-бот работает 24/7 — отвечает клиентам даже когда вы спите", icon: CheckCircle2 },
-            { title: "Принимает заявки через Telegram без вашего участия", icon: CheckCircle2 },
-            { title: "Автоматически расставляет приоритеты — горячие клиенты на первом месте", icon: CheckCircle2 },
-            { title: "Gemini AI обрабатывает прайс-лист и настраивает бота под ваш бизнес", icon: CheckCircle2 },
-            { title: "Вы получаете уведомление в Telegram сразу после новой заявки", icon: CheckCircle2 },
-            { title: "Простая настройка — загрузи прайс, и бот готов к работе", icon: CheckCircle2 },
+            { title: "AI-бот работает 24/7 — отвечает клиентам даже когда вы спите" },
+            { title: "Принимает заявки через Telegram без вашего участия" },
+            { title: "Автоматически расставляет приоритеты — горячие клиенты на первом месте" },
+            { title: "Gemini AI обрабатывает прайс-лист и настраивает бота под ваш бизнес" },
+            { title: "Вы получаете уведомление в Telegram сразу после новой заявки" },
+            { title: "Простая настройка — загрузи прайс, и бот готов к работе" },
           ].map((feature, i) => (
             <Card key={i} className="bg-card hover:border-primary/50 transition-colors">
               <CardContent className="p-6 flex gap-4 items-start">
-                <feature.icon className="w-6 h-6 text-primary shrink-0" />
+                <CheckCircle2 className="w-6 h-6 text-primary shrink-0 mt-0.5" />
                 <p className="font-medium">{feature.title}</p>
               </CardContent>
             </Card>
