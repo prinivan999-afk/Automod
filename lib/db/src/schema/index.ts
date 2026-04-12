@@ -21,3 +21,5 @@ export * from "./leads";
 export * from "./tariff";
 export * from "./conversations";
 export * from "./messages";
+export * from "./bot-accounts";
+export * from "./lead-chat-messages";

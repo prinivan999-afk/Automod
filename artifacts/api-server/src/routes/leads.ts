@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, and, gte, lte, sql } from "drizzle-orm";
-import { db, leadsTable } from "@workspace/db";
+import { db, leadsTable, leadChatMessagesTable } from "@workspace/db";
 import {
   ListLeadsQueryParams,
   CreateLeadBody,
@@ -64,6 +64,13 @@ router.post("/leads", async (req, res): Promise<void> => {
       isPriority,
     })
     .returning();
+
+  await db.insert(leadChatMessagesTable).values({
+    leadId: lead.id,
+    platform: lead.platform,
+    title: `Новая заявка: ${lead.clientName}`,
+    message: buildLeadChatMessage(formatLead(lead)),
+  });
 
   res.status(201).json(formatLead(lead));
 });
@@ -263,6 +270,22 @@ function generateRecommendation(status: string): string {
     default:
       return "Уточнить статус клиента";
   }
+}
+
+function buildLeadChatMessage(lead: ReturnType<typeof formatLead>): string {
+  const parts = [
+    `Клиент: ${lead.clientName}`,
+    `Платформа: ${lead.platform}`,
+    `Услуга: ${lead.service}`,
+    lead.quantity ? `Количество: ${lead.quantity}` : null,
+    lead.deadline ? `Срок: ${lead.deadline}` : null,
+    lead.price ? `Цена: ${lead.price}` : null,
+    lead.details ? `Детали: ${lead.details}` : null,
+    lead.comment ? `Комментарий: ${lead.comment}` : null,
+    `Статус: ${lead.status}`,
+  ].filter(Boolean);
+
+  return parts.join("\n");
 }
 
 export default router;

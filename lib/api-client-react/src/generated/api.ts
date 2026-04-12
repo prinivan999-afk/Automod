@@ -20,12 +20,15 @@ import type {
   AnalyticsSummary,
   AnalyzeTariffBody,
   AnalyzeTariffResponse,
+  BotAccount,
   CreateLeadBody,
   ErrorResponse,
   HealthStatus,
   Lead,
+  LeadChatMessage,
   ListLeadsParams,
   PlatformCount,
+  SaveBotAccountBody,
   SaveTariffSettingsBody,
   StatusCount,
   TariffSettings,
@@ -1180,3 +1183,239 @@ export const useSaveTariffSettings = <
 > => {
   return useMutation(getSaveTariffSettingsMutationOptions(options));
 };
+
+/**
+ * @summary Список подключённых аккаунтов
+ */
+export const getListBotAccountsUrl = () => {
+  return `/api/bot/accounts`;
+};
+
+export const listBotAccounts = async (
+  options?: RequestInit,
+): Promise<BotAccount[]> => {
+  return customFetch<BotAccount[]>(getListBotAccountsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListBotAccountsQueryKey = () => {
+  return [`/api/bot/accounts`] as const;
+};
+
+export const getListBotAccountsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listBotAccounts>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listBotAccounts>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListBotAccountsQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listBotAccounts>>> = ({
+    signal,
+  }) => listBotAccounts({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listBotAccounts>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListBotAccountsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listBotAccounts>>
+>;
+export type ListBotAccountsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Список подключённых аккаунтов
+ */
+
+export function useListBotAccounts<
+  TData = Awaited<ReturnType<typeof listBotAccounts>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listBotAccounts>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListBotAccountsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Сохранить данные аккаунта
+ */
+export const getSaveBotAccountUrl = () => {
+  return `/api/bot/accounts`;
+};
+
+export const saveBotAccount = async (
+  saveBotAccountBody: SaveBotAccountBody,
+  options?: RequestInit,
+): Promise<BotAccount> => {
+  return customFetch<BotAccount>(getSaveBotAccountUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(saveBotAccountBody),
+  });
+};
+
+export const getSaveBotAccountMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof saveBotAccount>>,
+    TError,
+    { data: BodyType<SaveBotAccountBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof saveBotAccount>>,
+  TError,
+  { data: BodyType<SaveBotAccountBody> },
+  TContext
+> => {
+  const mutationKey = ["saveBotAccount"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof saveBotAccount>>,
+    { data: BodyType<SaveBotAccountBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return saveBotAccount(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SaveBotAccountMutationResult = NonNullable<
+  Awaited<ReturnType<typeof saveBotAccount>>
+>;
+export type SaveBotAccountMutationBody = BodyType<SaveBotAccountBody>;
+export type SaveBotAccountMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Сохранить данные аккаунта
+ */
+export const useSaveBotAccount = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof saveBotAccount>>,
+    TError,
+    { data: BodyType<SaveBotAccountBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof saveBotAccount>>,
+  TError,
+  { data: BodyType<SaveBotAccountBody> },
+  TContext
+> => {
+  return useMutation(getSaveBotAccountMutationOptions(options));
+};
+
+/**
+ * @summary Чат уведомлений по заявкам
+ */
+export const getListLeadChatMessagesUrl = () => {
+  return `/api/lead-chat/messages`;
+};
+
+export const listLeadChatMessages = async (
+  options?: RequestInit,
+): Promise<LeadChatMessage[]> => {
+  return customFetch<LeadChatMessage[]>(getListLeadChatMessagesUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListLeadChatMessagesQueryKey = () => {
+  return [`/api/lead-chat/messages`] as const;
+};
+
+export const getListLeadChatMessagesQueryOptions = <
+  TData = Awaited<ReturnType<typeof listLeadChatMessages>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listLeadChatMessages>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListLeadChatMessagesQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listLeadChatMessages>>
+  > = ({ signal }) => listLeadChatMessages({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listLeadChatMessages>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListLeadChatMessagesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listLeadChatMessages>>
+>;
+export type ListLeadChatMessagesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Чат уведомлений по заявкам
+ */
+
+export function useListLeadChatMessages<
+  TData = Awaited<ReturnType<typeof listLeadChatMessages>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listLeadChatMessages>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListLeadChatMessagesQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}

@@ -297,3 +297,55 @@ export const SaveTariffSettingsResponse = zod.object({
   createdAt: zod.string(),
   updatedAt: zod.string(),
 });
+
+/**
+ * @summary Список подключённых аккаунтов
+ */
+export const ListBotAccountsResponseItem = zod.object({
+  id: zod.number(),
+  platform: zod.enum(["Telegram", "Instagram", "MAX"]),
+  accountName: zod.string(),
+  accountHandle: zod.string(),
+  notificationChat: zod.string(),
+  isActive: zod.boolean(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+});
+export const ListBotAccountsResponse = zod.array(ListBotAccountsResponseItem);
+
+/**
+ * @summary Сохранить данные аккаунта
+ */
+export const SaveBotAccountBody = zod.object({
+  platform: zod.enum(["Telegram", "Instagram", "MAX"]),
+  accountName: zod.string(),
+  accountHandle: zod.string(),
+  notificationChat: zod.string(),
+  isActive: zod.boolean().optional(),
+});
+
+export const SaveBotAccountResponse = zod.object({
+  id: zod.number(),
+  platform: zod.enum(["Telegram", "Instagram", "MAX"]),
+  accountName: zod.string(),
+  accountHandle: zod.string(),
+  notificationChat: zod.string(),
+  isActive: zod.boolean(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+});
+
+/**
+ * @summary Чат уведомлений по заявкам
+ */
+export const ListLeadChatMessagesResponseItem = zod.object({
+  id: zod.number(),
+  leadId: zod.number().nullish(),
+  platform: zod.enum(["Telegram", "Instagram", "MAX"]),
+  title: zod.string(),
+  message: zod.string(),
+  createdAt: zod.string(),
+});
+export const ListLeadChatMessagesResponse = zod.array(
+  ListLeadChatMessagesResponseItem,
+);

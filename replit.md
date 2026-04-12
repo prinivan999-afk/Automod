@@ -30,6 +30,8 @@ Full-stack app: React + Vite frontend (crm-dashboard), Express 5 API server, Pos
 - **Add lead**: Manual lead entry form (for testing bot integration)
 - **Bot integration**: POST /api/leads endpoint accepts structured JSON from bots
 - **Tariff platforms**: Tariff setup can target Telegram, Instagram, and/or MAX bots
+- **Account hosting setup**: Business owner records Telegram/MAX/Instagram account details in the leads section
+- **Lead chat**: Each created lead automatically creates a CRM chat message with the collected client information
 
 ## Bot Integration API
 
@@ -65,3 +67,5 @@ POST /api/leads
 - `lib/db/src/schema/leads.ts` — Leads table schema
 - `lib/api-spec/openapi.yaml` — API spec (source of truth)
 - `lib/integrations-gemini-ai/` — Gemini client and helper modules
+- `lib/db/src/schema/bot-accounts.ts` — connected messaging account records
+- `lib/db/src/schema/lead-chat-messages.ts` — CRM lead notification chat messages

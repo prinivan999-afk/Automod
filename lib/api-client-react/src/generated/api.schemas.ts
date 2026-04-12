@@ -214,6 +214,62 @@ export interface SaveTariffSettingsBody {
   platforms: string;
 }
 
+export type BotAccountPlatform =
+  (typeof BotAccountPlatform)[keyof typeof BotAccountPlatform];
+
+export const BotAccountPlatform = {
+  Telegram: "Telegram",
+  Instagram: "Instagram",
+  MAX: "MAX",
+} as const;
+
+export interface BotAccount {
+  id: number;
+  platform: BotAccountPlatform;
+  accountName: string;
+  accountHandle: string;
+  notificationChat: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type SaveBotAccountBodyPlatform =
+  (typeof SaveBotAccountBodyPlatform)[keyof typeof SaveBotAccountBodyPlatform];
+
+export const SaveBotAccountBodyPlatform = {
+  Telegram: "Telegram",
+  Instagram: "Instagram",
+  MAX: "MAX",
+} as const;
+
+export interface SaveBotAccountBody {
+  platform: SaveBotAccountBodyPlatform;
+  accountName: string;
+  accountHandle: string;
+  notificationChat: string;
+  isActive?: boolean;
+}
+
+export type LeadChatMessagePlatform =
+  (typeof LeadChatMessagePlatform)[keyof typeof LeadChatMessagePlatform];
+
+export const LeadChatMessagePlatform = {
+  Telegram: "Telegram",
+  Instagram: "Instagram",
+  MAX: "MAX",
+} as const;
+
+export interface LeadChatMessage {
+  id: number;
+  /** @nullable */
+  leadId?: number | null;
+  platform: LeadChatMessagePlatform;
+  title: string;
+  message: string;
+  createdAt: string;
+}
+
 export type ListLeadsParams = {
   status?: ListLeadsStatus;
   platform?: ListLeadsPlatform;

@@ -16,6 +16,8 @@ tags:
     description: Аналитика и статистика
   - name: tariff
     description: Анализ тарифов и прайс-листов через Gemini AI
+  - name: bot
+    description: Подключение аккаунтов и внутренний чат заявок
 paths:
   /healthz:
     get:
@@ -316,6 +318,59 @@ paths:
               schema:
                 $ref: "#/components/schemas/TariffSettings"
 
+  /bot/accounts:
+    get:
+      operationId: listBotAccounts
+      tags: [bot]
+      summary: Список подключённых аккаунтов
+      responses:
+        "200":
+          description: Подключённые аккаунты
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BotAccount"
+    post:
+      operationId: saveBotAccount
+      tags: [bot]
+      summary: Сохранить данные аккаунта
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SaveBotAccountBody"
+      responses:
+        "200":
+          description: Аккаунт сохранён
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BotAccount"
+        "400":
+          description: Ошибка валидации
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /lead-chat/messages:
+    get:
+      operationId: listLeadChatMessages
+      tags: [bot]
+      summary: Чат уведомлений по заявкам
+      responses:
+        "200":
+          description: Сообщения чата
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LeadChatMessage"
+
 components:
   schemas:
     HealthStatus:
@@ -596,3 +651,76 @@ components:
         - structuredData
         - botPrompt
         - platforms
+
+    BotAccount:
+      type: object
+      properties:
+        id:
+          type: integer
+        platform:
+          type: string
+          enum: [Telegram, Instagram, MAX]
+        accountName:
+          type: string
+        accountHandle:
+          type: string
+        notificationChat:
+          type: string
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required:
+        - id
+        - platform
+        - accountName
+        - accountHandle
+        - notificationChat
+        - isActive
+        - createdAt
+        - updatedAt
+
+    SaveBotAccountBody:
+      type: object
+      properties:
+        platform:
+          type: string
+          enum: [Telegram, Instagram, MAX]
+        accountName:
+          type: string
+        accountHandle:
+          type: string
+        notificationChat:
+          type: string
+        isActive:
+          type: boolean
+      required:
+        - platform
+        - accountName
+        - accountHandle
+        - notificationChat
+
+    LeadChatMessage:
+      type: object
+      properties:
+        id:
+          type: integer
+        leadId:
+          type: ["integer", "null"]
+        platform:
+          type: string
+          enum: [Telegram, Instagram, MAX]
+        title:
+          type: string
+        message:
+          type: string
+        createdAt:
+          type: string
+      required:
+        - id
+        - platform
+        - title
+        - message
+        - createdAt
