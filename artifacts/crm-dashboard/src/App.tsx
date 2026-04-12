@@ -20,6 +20,11 @@ const queryClient = new QueryClient({
     queries: {
       refetchOnWindowFocus: false,
       staleTime: 5 * 60 * 1000,
+      retry: (failureCount, error: unknown) => {
+        const status = (error as any)?.response?.status ?? (error as any)?.status;
+        if (status && status >= 400 && status < 500) return false;
+        return failureCount < 1;
+      },
     },
   },
 });
