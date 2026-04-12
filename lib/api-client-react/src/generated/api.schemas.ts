@@ -270,6 +270,21 @@ export interface LeadChatMessage {
   createdAt: string;
 }
 
+export interface RegisterUserBody {
+  /** Telegram username без @ (например misha_shop) */
+  telegramUsername: string;
+}
+
+export interface UserProfile {
+  id: number;
+  telegramUsername: string;
+  apiToken: string;
+  /** @nullable */
+  telegramChatId?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export type ListLeadsParams = {
   status?: ListLeadsStatus;
   platform?: ListLeadsPlatform;
@@ -294,3 +309,7 @@ export const ListLeadsPlatform = {
   Instagram: "Instagram",
   MAX: "MAX",
 } as const;
+
+export type GetUserProfileParams = {
+  apiToken: string;
+};

@@ -336,6 +336,40 @@ export const SaveBotAccountResponse = zod.object({
 });
 
 /**
+ * @summary Зарегистрировать пользователя и получить API-токен
+ */
+export const RegisterUserBody = zod.object({
+  telegramUsername: zod
+    .string()
+    .describe("Telegram username без @ (например misha_shop)"),
+});
+
+export const RegisterUserResponse = zod.object({
+  id: zod.number(),
+  telegramUsername: zod.string(),
+  apiToken: zod.string(),
+  telegramChatId: zod.string().nullish(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+});
+
+/**
+ * @summary Получить профиль текущего пользователя по токену
+ */
+export const GetUserProfileQueryParams = zod.object({
+  apiToken: zod.coerce.string(),
+});
+
+export const GetUserProfileResponse = zod.object({
+  id: zod.number(),
+  telegramUsername: zod.string(),
+  apiToken: zod.string(),
+  telegramChatId: zod.string().nullish(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+});
+
+/**
  * @summary Чат уведомлений по заявкам
  */
 export const ListLeadChatMessagesResponseItem = zod.object({

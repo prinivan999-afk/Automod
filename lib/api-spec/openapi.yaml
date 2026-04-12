@@ -18,6 +18,8 @@ tags:
     description: Анализ тарифов и прайс-листов через Gemini AI
   - name: bot
     description: Подключение аккаунтов и внутренний чат заявок
+  - name: users
+    description: Управление пользователями и API-токенами
 paths:
   /healthz:
     get:
@@ -351,6 +353,56 @@ paths:
                 $ref: "#/components/schemas/BotAccount"
         "400":
           description: Ошибка валидации
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /users/register:
+    post:
+      operationId: registerUser
+      tags: [users]
+      summary: Зарегистрировать пользователя и получить API-токен
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterUserBody"
+      responses:
+        "200":
+          description: Пользователь зарегистрирован
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+        "400":
+          description: Ошибка валидации
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /users/profile:
+    get:
+      operationId: getUserProfile
+      tags: [users]
+      summary: Получить профиль текущего пользователя по токену
+      parameters:
+        - name: apiToken
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Профиль пользователя
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+        "404":
+          description: Пользователь не найден
           content:
             application/json:
               schema:
@@ -724,3 +776,34 @@ components:
         - title
         - message
         - createdAt
+
+    RegisterUserBody:
+      type: object
+      properties:
+        telegramUsername:
+          type: string
+          description: Telegram username без @ (например misha_shop)
+      required:
+        - telegramUsername
+
+    UserProfile:
+      type: object
+      properties:
+        id:
+          type: integer
+        telegramUsername:
+          type: string
+        apiToken:
+          type: string
+        telegramChatId:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required:
+        - id
+        - telegramUsername
+        - apiToken
+        - createdAt
+        - updatedAt
