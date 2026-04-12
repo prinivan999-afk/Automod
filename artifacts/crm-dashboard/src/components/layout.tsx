@@ -21,7 +21,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <div className="w-8 h-8 rounded-md bg-primary flex items-center justify-center text-primary-foreground">
             <Activity className="w-5 h-5" />
           </div>
-          <span className="text-xl font-bold tracking-tight text-sidebar-foreground">LeadFlow</span>
+          <span className="text-xl font-bold tracking-tight text-sidebar-foreground">AutoMind</span>
         </div>
 
         <nav className="flex-1 px-4 space-y-2">
@@ -45,7 +45,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </nav>
         
         <div className="p-6 border-t border-sidebar-border text-sm text-sidebar-foreground/50">
-          LeadFlow v1.0
+          AutoMind v1.0
         </div>
       </aside>
 
