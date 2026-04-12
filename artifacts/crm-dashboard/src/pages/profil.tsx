@@ -1,11 +1,11 @@
 import { useState } from "react";
-import { useRegisterUser } from "@workspace/api-client-react";
+import { useRegisterUser, useGetUserProfile } from "@workspace/api-client-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { MessageCircle, Copy, Check, Key, User, Send, ShieldCheck, ShieldAlert } from "lucide-react";
+import { MessageCircle, Copy, Check, Key, User, Send, ShieldCheck, ShieldAlert, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
 type Profile = {
@@ -21,8 +21,40 @@ export default function Profil() {
     return saved ? JSON.parse(saved) : null;
   });
   const [copied, setCopied] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const registerMutation = useRegisterUser();
+
+  const { refetch: refetchProfile } = useGetUserProfile(
+    { apiToken: profile?.apiToken ?? "" },
+    { query: { enabled: false } }
+  );
+
+  const handleRefreshStatus = async () => {
+    if (!profile?.apiToken) return;
+    setIsRefreshing(true);
+    try {
+      const { data } = await refetchProfile();
+      if (data) {
+        const updated: Profile = {
+          telegramUsername: data.telegramUsername,
+          apiToken: data.apiToken,
+          telegramUsernameVerified: (data as Profile).telegramUsernameVerified ?? false,
+        };
+        setProfile(updated);
+        localStorage.setItem("crm_profile", JSON.stringify(updated));
+        if (updated.telegramUsernameVerified) {
+          toast.success("Username верифицирован!");
+        } else {
+          toast.info("Верификация ещё не выполнена. Отправьте /token боту.");
+        }
+      }
+    } catch {
+      toast.error("Не удалось обновить статус");
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   const handleRegister = () => {
     const clean = telegramUsername.replace(/^@/, "").trim();
@@ -118,12 +150,22 @@ export default function Profil() {
               </div>
 
               {!isVerified && (
-                <div className="rounded-md border border-yellow-500/20 bg-yellow-500/5 p-3 text-sm text-yellow-600 dark:text-yellow-400">
-                  <p className="font-medium mb-1">Требуется верификация</p>
+                <div className="rounded-md border border-yellow-500/20 bg-yellow-500/5 p-3 text-sm text-yellow-600 dark:text-yellow-400 space-y-2">
+                  <p className="font-medium">Требуется верификация</p>
                   <p className="text-xs">
                     Пока username не верифицирован, покупатели не смогут найти вас через бота. Отправьте команду{" "}
                     <code className="bg-black/10 dark:bg-white/10 px-1 rounded">/token</code> боту, чтобы подтвердить владение аккаунтом.
                   </p>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="w-full border-yellow-500/30 text-yellow-600 dark:text-yellow-400 hover:bg-yellow-500/10"
+                    onClick={handleRefreshStatus}
+                    disabled={isRefreshing}
+                  >
+                    <RefreshCw className={`w-3 h-3 mr-2 ${isRefreshing ? "animate-spin" : ""}`} />
+                    {isRefreshing ? "Проверяем..." : "Я отправил команду — проверить статус"}
+                  </Button>
                 </div>
               )}
 
