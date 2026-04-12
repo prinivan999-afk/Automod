@@ -311,9 +311,46 @@ export function startTelegramBot() {
 
   const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 
-  bot.onText(/\/start/, async (msg) => {
+  bot.onText(/\/start(?:\s+(\S+))?/, async (msg, match) => {
     const chatId = String(msg.chat.id);
+    const deepLinkParam = match?.[1]?.trim();
 
+    // Deep link: /start username — auto-set seller context
+    if (deepLinkParam) {
+      const seller = await getSellerByUsername(deepLinkParam);
+
+      if (seller) {
+        await upsertConversation(chatId, {
+          status: "active",
+          sellerId: seller.id,
+          sellerUsername: seller.telegramUsername,
+          messages: "[]",
+          leadId: null,
+        });
+
+        const greeting = DEFAULT_GREETING;
+        await bot.sendMessage(chatId, greeting, { parse_mode: "Markdown" });
+        return;
+      }
+
+      // Seller not found — fallback to manual entry
+      await upsertConversation(chatId, {
+        status: "waiting_seller",
+        sellerId: null,
+        sellerUsername: null,
+        messages: "[]",
+        leadId: null,
+      });
+
+      await bot.sendMessage(
+        chatId,
+        `❌ Продавец *@${deepLinkParam}* не найден.\n\nУкажите правильный *@username* продавца:`,
+        { parse_mode: "Markdown" }
+      );
+      return;
+    }
+
+    // No deep link — ask for seller username manually
     await upsertConversation(chatId, {
       status: "waiting_seller",
       sellerId: null,

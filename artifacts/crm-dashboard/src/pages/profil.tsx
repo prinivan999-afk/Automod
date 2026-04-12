@@ -372,34 +372,67 @@ export default function Profil() {
           </Card>
 
           {isVerified && (
-            <Card>
+            <Card className="border-primary/30">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Send className="w-5 h-5" />
-                  Как работает бот для покупателей
+                  <Send className="w-5 h-5 text-blue-400" />
+                  Ваша ссылка для клиентов
                 </CardTitle>
+                <CardDescription>
+                  Клиент переходит по ссылке — бот сразу знает, что он пишет вам
+                </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-5">
+                {/* Deep link block */}
+                <div className="rounded-lg border border-primary/20 bg-primary/5 p-4">
+                  <p className="text-xs text-muted-foreground mb-2 font-medium uppercase tracking-wide">Персональная ссылка</p>
+                  <div className="flex items-center gap-2">
+                    <code className="flex-1 text-sm font-mono text-foreground break-all">
+                      {`https://t.me/AutoMind5_bot?start=${profile.telegramUsername}`}
+                    </code>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="shrink-0 gap-1.5"
+                      onClick={() => handleCopy(`https://t.me/AutoMind5_bot?start=${profile.telegramUsername}`)}
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                      Копировать
+                    </Button>
+                  </div>
+                </div>
+
+                {/* How it works */}
                 <div className="space-y-3 text-sm">
+                  <p className="font-medium text-muted-foreground">Как это работает:</p>
                   {[
-                    `В описании канала разместите ссылку на бота и ваш юзернейм: @${profile.telegramUsername}`,
-                    `Покупатель открывает бота и пишет @${profile.telegramUsername}`,
-                    "Gemini AI начинает диалог и узнаёт детали заказа по вашему прайсу",
-                    "Когда клиент готов — заявка создаётся в CRM и приходит вам в Telegram",
+                    "Разместите ссылку в описании канала, в шапке профиля или в рекламе",
+                    "Клиент нажимает ссылку — бот автоматически открывается уже настроенным на вас",
+                    "Gemini AI сразу начинает диалог и выясняет детали заказа по вашему прайсу",
+                    "Готовая заявка появляется в CRM и приходит вам уведомлением в Telegram",
                   ].map((text, i) => (
                     <div key={i} className="flex gap-3">
-                      <span className="w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center shrink-0 text-xs font-bold">{i + 1}</span>
-                      <p>{text}</p>
+                      <span className="w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center shrink-0 text-xs font-bold">
+                        {i + 1}
+                      </span>
+                      <p className="text-muted-foreground">{text}</p>
                     </div>
                   ))}
                 </div>
 
+                {/* Short text for sharing */}
                 <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-                  <p className="font-medium text-foreground mb-1">Текст для описания:</p>
+                  <p className="font-medium text-foreground mb-2">Готовый текст для размещения:</p>
                   <div className="flex items-start gap-2">
-                    <p className="flex-1 font-mono text-xs">{`Для заказа напишите нашему боту и укажите @${profile.telegramUsername}`}</p>
-                    <Button variant="ghost" size="icon" className="shrink-0 h-6 w-6"
-                      onClick={() => handleCopy(`Для заказа напишите нашему боту и укажите @${profile.telegramUsername}`)}>
+                    <p className="flex-1 font-mono text-xs leading-relaxed">
+                      {`Для заказа — напишите нашему боту: https://t.me/AutoMind5_bot?start=${profile.telegramUsername}`}
+                    </p>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="shrink-0 h-6 w-6"
+                      onClick={() => handleCopy(`Для заказа — напишите нашему боту: https://t.me/AutoMind5_bot?start=${profile.telegramUsername}`)}
+                    >
                       <Copy className="w-3 h-3" />
                     </Button>
                   </div>
