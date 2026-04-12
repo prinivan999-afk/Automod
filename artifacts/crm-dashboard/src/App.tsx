@@ -10,6 +10,7 @@ import ZayavkiDetail from "@/pages/zayavki-detail";
 import Tarif from "@/pages/tarif";
 import Analitika from "@/pages/analitika";
 import Profil from "@/pages/profil";
+import Raspisanie from "@/pages/raspisanie";
 import { useEffect } from "react";
 
 const queryClient = new QueryClient({
@@ -31,6 +32,7 @@ function Router() {
         <Route path="/tarif" component={Tarif} />
         <Route path="/analitika" component={Analitika} />
         <Route path="/profil" component={Profil} />
+        <Route path="/raspisanie" component={Raspisanie} />
         <Route component={NotFound} />
       </Switch>
     </Layout>

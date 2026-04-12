@@ -1,19 +1,61 @@
 import TelegramBot from "node-telegram-bot-api";
-import { eq } from "drizzle-orm";
-import { db, usersTable, tariffSettingsTable, leadsTable, leadChatMessagesTable } from "@workspace/db";
+import { eq, and } from "drizzle-orm";
+import {
+  db,
+  usersTable,
+  tariffSettingsTable,
+  leadsTable,
+  leadChatMessagesTable,
+  workScheduleTable,
+  appointmentsTable,
+  botConversationsTable,
+} from "@workspace/db";
 import { ai } from "@workspace/integrations-gemini-ai";
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
-interface ConversationState {
-  userId: number;
-  sellerId: number;
-  sellerUsername: string;
-  messages: Array<{ role: "user" | "model"; parts: Array<{ text: string }> }>;
-  startedAt: number;
+type BotMessage = { role: "user" | "model"; parts: Array<{ text: string }> };
+
+const DEFAULT_GREETING = "Здравствуйте! Я ваш дружелюбный AI-помощник. Чем могу помочь?";
+
+async function getConversation(chatId: string) {
+  const [conv] = await db
+    .select()
+    .from(botConversationsTable)
+    .where(eq(botConversationsTable.userChatId, chatId))
+    .limit(1);
+  return conv ?? null;
 }
 
-const conversations = new Map<number, ConversationState>();
+async function upsertConversation(chatId: string, data: Partial<typeof botConversationsTable.$inferInsert>) {
+  const existing = await getConversation(chatId);
+  if (existing) {
+    const [updated] = await db
+      .update(botConversationsTable)
+      .set(data)
+      .where(eq(botConversationsTable.userChatId, chatId))
+      .returning();
+    return updated;
+  } else {
+    const [created] = await db
+      .insert(botConversationsTable)
+      .values({ userChatId: chatId, messages: "[]", status: "waiting_seller", ...data })
+      .returning();
+    return created;
+  }
+}
+
+async function addMessage(chatId: string, msg: BotMessage) {
+  const conv = await getConversation(chatId);
+  if (!conv) return;
+  const messages: BotMessage[] = JSON.parse(conv.messages || "[]");
+  messages.push(msg);
+  await db
+    .update(botConversationsTable)
+    .set({ messages: JSON.stringify(messages) })
+    .where(eq(botConversationsTable.userChatId, chatId));
+  return messages;
+}
 
 async function getSellerByUsername(username: string) {
   const clean = username.replace(/^@/, "").toLowerCase().trim();
@@ -25,7 +67,7 @@ async function getSellerByUsername(username: string) {
   return user ?? null;
 }
 
-async function getBotPrompt(sellerId: number): Promise<string> {
+async function getBotPrompt(): Promise<string> {
   const [settings] = await db
     .select()
     .from(tariffSettingsTable)
@@ -36,16 +78,113 @@ async function getBotPrompt(sellerId: number): Promise<string> {
     return settings.botPrompt;
   }
 
-  return `Ты — вежливый AI-помощник бизнеса в Telegram. 
-Отвечай на вопросы клиентов, уточняй детали заказа (что нужно, количество, сроки, пожелания).
+  return `Ты — вежливый AI-помощник бизнеса в Telegram.
+Отвечай на вопросы клиентов, уточняй детали (что нужно, количество, сроки, пожелания).
 Общайся по-русски, будь приветлив и профессионален.
-Когда клиент определился с заказом — скажи, что его заявка принята и менеджер свяжется с ним.`;
+Когда клиент определился — скажи, что его заявка принята и менеджер свяжется с ним.`;
+}
+
+function generateTimeSlots(start: string, end: string, slotMinutes: number): string[] {
+  const slots: string[] = [];
+  const [sh, sm] = start.split(":").map(Number);
+  const [eh, em] = end.split(":").map(Number);
+  let current = sh * 60 + sm;
+  const endMinutes = eh * 60 + em;
+  while (current + slotMinutes <= endMinutes) {
+    const h = Math.floor(current / 60).toString().padStart(2, "0");
+    const m = (current % 60).toString().padStart(2, "0");
+    slots.push(`${h}:${m}`);
+    current += slotMinutes;
+  }
+  return slots;
+}
+
+async function getAvailableSlotsText(dateStr: string): Promise<string> {
+  let dateObj: Date;
+  try {
+    dateObj = new Date(dateStr);
+    if (isNaN(dateObj.getTime())) throw new Error("invalid");
+  } catch {
+    return "Не удалось определить дату. Пожалуйста, укажите в формате ДД.ММ.ГГГГ.";
+  }
+
+  const dayOfWeek = dateObj.getDay();
+  const DAY_NAMES = ["воскресенье", "понедельник", "вторник", "среда", "четверг", "пятница", "суббота"];
+
+  const [daySchedule] = await db
+    .select()
+    .from(workScheduleTable)
+    .where(eq(workScheduleTable.dayOfWeek, dayOfWeek));
+
+  if (!daySchedule || !daySchedule.isWorking) {
+    return `К сожалению, ${DAY_NAMES[dayOfWeek]} — выходной день. Пожалуйста, выберите другую дату.`;
+  }
+
+  const isoDate = dateObj.toISOString().split("T")[0];
+  const allSlots = generateTimeSlots(daySchedule.startTime, daySchedule.endTime, daySchedule.slotDuration);
+
+  const booked = await db
+    .select()
+    .from(appointmentsTable)
+    .where(and(eq(appointmentsTable.date, isoDate), eq(appointmentsTable.status, "booked")));
+
+  const bookedTimes = new Set(booked.map((b) => b.timeSlot));
+  const freeSlots = allSlots.filter((s) => !bookedTimes.has(s));
+
+  if (freeSlots.length === 0) {
+    return `На ${dateStr} все слоты заняты. Пожалуйста, выберите другую дату.`;
+  }
+
+  const formatted = dateObj.toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
+  return `Свободное время на ${formatted}:\n${freeSlots.map((s) => `🕐 ${s}`).join("\n")}\n\nВыберите удобное время!`;
+}
+
+async function parseDateFromText(text: string): Promise<string | null> {
+  const patterns = [
+    /(\d{1,2})[./](\d{1,2})[./](\d{4})/,
+    /(\d{1,2})[./](\d{1,2})/,
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match) {
+      const day = parseInt(match[1]);
+      const month = parseInt(match[2]);
+      const year = match[3] ? parseInt(match[3]) : new Date().getFullYear();
+      const date = new Date(year, month - 1, day);
+      if (!isNaN(date.getTime())) {
+        return date.toISOString().split("T")[0];
+      }
+    }
+  }
+
+  const russianMonths: Record<string, number> = {
+    "январ": 1, "феврал": 2, "март": 3, "апрел": 4,
+    "май": 5, "мая": 5, "июн": 6, "июл": 7, "август": 8,
+    "сентябр": 9, "октябр": 10, "ноябр": 11, "декабр": 12,
+  };
+
+  const dayMonthMatch = text.match(/(\d{1,2})\s+(\w+)/);
+  if (dayMonthMatch) {
+    const day = parseInt(dayMonthMatch[1]);
+    const monthWord = dayMonthMatch[2].toLowerCase();
+    for (const [key, monthNum] of Object.entries(russianMonths)) {
+      if (monthWord.startsWith(key)) {
+        const year = new Date().getFullYear();
+        const date = new Date(year, monthNum - 1, day);
+        if (!isNaN(date.getTime())) {
+          return date.toISOString().split("T")[0];
+        }
+      }
+    }
+  }
+
+  return null;
 }
 
 async function extractLeadFromConversation(
-  messages: ConversationState["messages"],
-  clientName: string,
-  botPrompt: string
+  messages: BotMessage[],
+  clientName: string
 ): Promise<{
   service: string;
   details: string | null;
@@ -58,7 +197,7 @@ async function extractLeadFromConversation(
     .map((m) => `${m.role === "user" ? "Клиент" : "Бот"}: ${m.parts[0]?.text}`)
     .join("\n");
 
-  const extractPrompt = `Ты анализируешь переписку клиента с AI-ботом бизнеса.
+  const extractPrompt = `Ты анализируешь переписку клиента с AI-ботом.
 
 Переписка:
 """
@@ -70,10 +209,9 @@ ${conversationText}
   "service": "что хочет клиент (кратко, 2-5 слов)",
   "details": "подробности или null",
   "quantity": "количество или null",
-  "deadline": "срок или null",
+  "deadline": "дата/срок или null",
   "price": "цена если называлась или null",
-  "status": "hot если клиент готов купить, warm если интересуется, cold если просто смотрит",
-  "readyToClose": true/false
+  "status": "hot если клиент готов и выбрал время, warm если интересуется, cold если просто смотрит"
 }`;
 
   try {
@@ -83,8 +221,7 @@ ${conversationText}
       config: { maxOutputTokens: 1024 },
     });
     const text = (response.text ?? "").replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-    const data = JSON.parse(text);
-    return data;
+    return JSON.parse(text);
   } catch {
     return null;
   }
@@ -98,12 +235,12 @@ async function sendLeadToSeller(
   if (!seller.telegramChatId) return;
 
   const msg = [
-    `🆕 *Новая заявка от клиента*`,
+    `🆕 *Новая заявка из Telegram*`,
     ``,
     `👤 Клиент: ${lead.clientName}`,
     `📦 Услуга: ${lead.service}`,
     lead.quantity ? `📊 Количество: ${lead.quantity}` : null,
-    lead.deadline ? `⏰ Срок: ${lead.deadline}` : null,
+    lead.deadline ? `📅 Дата/Срок: ${lead.deadline}` : null,
     lead.price ? `💰 Цена: ${lead.price}` : null,
     lead.details ? `📝 Детали: ${lead.details}` : null,
     ``,
@@ -115,7 +252,7 @@ async function sendLeadToSeller(
   try {
     await bot.sendMessage(seller.telegramChatId, msg, { parse_mode: "Markdown" });
   } catch (e) {
-    console.error("Failed to send lead to seller:", e);
+    console.error("[TelegramBot] Failed to send lead to seller:", e);
   }
 }
 
@@ -128,21 +265,25 @@ export function startTelegramBot() {
   const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 
   bot.onText(/\/start/, async (msg) => {
-    const chatId = msg.chat.id;
-    const userId = msg.from?.id;
-    if (!userId) return;
+    const chatId = String(msg.chat.id);
 
-    const text = `Привет! 👋
+    await upsertConversation(chatId, {
+      status: "waiting_seller",
+      sellerId: null,
+      sellerUsername: null,
+      messages: "[]",
+      leadId: null,
+    });
 
-Я AI-помощник для клиентов. 
-
-Чтобы начать, напишите *@username* продавца (например: *@misha_flowers*), и я помогу вам оформить заказ!`;
-
-    await bot.sendMessage(chatId, text, { parse_mode: "Markdown" });
+    await bot.sendMessage(
+      chatId,
+      `${DEFAULT_GREETING}\n\nЧтобы начать, укажите *@username* продавца.\nНапример: *@misha_flowers*`,
+      { parse_mode: "Markdown" }
+    );
   });
 
   bot.onText(/\/token (.+)/, async (msg, match) => {
-    const chatId = msg.chat.id;
+    const chatId = String(msg.chat.id);
     const token = match?.[1]?.trim();
     if (!token) return;
 
@@ -153,38 +294,72 @@ export function startTelegramBot() {
       .limit(1);
 
     if (!user) {
-      await bot.sendMessage(chatId, "❌ Токен не найден. Проверьте токен в вашем личном кабинете.");
+      await bot.sendMessage(chatId, "❌ Токен не найден. Проверьте токен в личном кабинете.");
       return;
     }
 
     await db
       .update(usersTable)
-      .set({ telegramChatId: String(chatId) })
+      .set({ telegramChatId: chatId })
       .where(eq(usersTable.id, user.id));
 
     await bot.sendMessage(
       chatId,
-      `✅ Ваш аккаунт *${user.telegramUsername}* успешно привязан!\n\nТеперь все новые заявки будут приходить сюда.`,
+      `✅ Аккаунт *@${user.telegramUsername}* успешно привязан!\n\nТеперь новые заявки будут приходить сюда.`,
+      { parse_mode: "Markdown" }
+    );
+  });
+
+  bot.onText(/\/zapisi/, async (msg) => {
+    const chatId = String(msg.chat.id);
+    const conv = await getConversation(chatId);
+
+    if (!conv || conv.status === "waiting_seller") {
+      await bot.sendMessage(chatId, "Сначала укажите @username продавца, чтобы я мог показать расписание.");
+      return;
+    }
+
+    const schedule = await db
+      .select()
+      .from(workScheduleTable)
+      .orderBy(workScheduleTable.dayOfWeek);
+
+    if (schedule.length === 0) {
+      await bot.sendMessage(chatId, "Расписание ещё не настроено. Обратитесь к администратору.");
+      return;
+    }
+
+    const DAY_NAMES = ["Воскресенье", "Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота"];
+    const scheduleText = schedule
+      .map((s) => {
+        if (!s.isWorking) return `${DAY_NAMES[s.dayOfWeek]}: выходной`;
+        return `${DAY_NAMES[s.dayOfWeek]}: ${s.startTime}–${s.endTime} (каждые ${s.slotDuration} мин)`;
+      })
+      .join("\n");
+
+    await bot.sendMessage(
+      chatId,
+      `📅 *График работы:*\n\n${scheduleText}\n\nНапишите удобную вам дату — покажу свободное время!`,
       { parse_mode: "Markdown" }
     );
   });
 
   bot.on("message", async (msg) => {
-    const chatId = msg.chat.id;
+    const chatId = String(msg.chat.id);
     const userId = msg.from?.id;
     const text = msg.text;
 
     if (!userId || !text) return;
     if (text.startsWith("/")) return;
 
-    const existingConv = conversations.get(userId);
+    let conv = await getConversation(chatId);
 
-    if (!existingConv) {
+    if (!conv || conv.status === "waiting_seller") {
       const usernameMatch = text.match(/@(\w+)/);
       if (!usernameMatch) {
         await bot.sendMessage(
           chatId,
-          `Чтобы начать, укажите *@username* продавца.\n\nНапример: *@misha_flowers*`,
+          `Чтобы начать, укажите *@username* продавца.\nНапример: *@misha_flowers*`,
           { parse_mode: "Markdown" }
         );
         return;
@@ -194,57 +369,74 @@ export function startTelegramBot() {
       if (!seller) {
         await bot.sendMessage(
           chatId,
-          `❌ Продавец *@${usernameMatch[1]}* не найден в системе. Проверьте правильность username.`,
+          `❌ Продавец *@${usernameMatch[1]}* не найден. Проверьте правильность username.`,
           { parse_mode: "Markdown" }
         );
         return;
       }
 
-      const botPrompt = await getBotPrompt(seller.id);
+      const botPrompt = await getBotPrompt();
 
-      conversations.set(userId, {
-        userId,
-        sellerId: seller.id,
-        sellerUsername: seller.telegramUsername,
-        messages: [],
-        startedAt: Date.now(),
-      });
-
-      const greeting = await ai.models.generateContent({
+      const greetingResponse = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
         contents: [
           {
             role: "user",
             parts: [
               {
-                text: `${botPrompt}\n\nПоздоровайся с клиентом и спроси, чем можешь помочь. Ответь одним коротким сообщением.`,
+                text: `${botPrompt}\n\nПоздоровайся с клиентом. Скажи: "Здравствуйте! Я ваш дружелюбный AI-помощник." и спроси чем можешь помочь. Одно короткое сообщение.`,
               },
             ],
           },
         ],
-        config: { maxOutputTokens: 512 },
+        config: { maxOutputTokens: 256 },
       });
 
-      const greetText = greeting.text ?? "Здравствуйте! Чем могу помочь?";
+      const greetText = greetingResponse.text ?? "Здравствуйте! Я ваш дружелюбный AI-помощник. Чем могу помочь?";
 
-      conversations.get(userId)!.messages.push({
-        role: "model",
-        parts: [{ text: greetText }],
+      conv = await upsertConversation(chatId, {
+        sellerId: seller.id,
+        sellerUsername: seller.telegramUsername,
+        status: "active",
+        messages: JSON.stringify([{ role: "model", parts: [{ text: greetText }] }]),
       });
 
       await bot.sendMessage(chatId, greetText);
       return;
     }
 
-    const conv = existingConv;
-    conv.messages.push({ role: "user", parts: [{ text }] });
+    if (conv.status === "closed") {
+      await upsertConversation(chatId, {
+        status: "active",
+        messages: "[]",
+        leadId: null,
+      });
+      conv = (await getConversation(chatId))!;
+    }
 
-    const botPrompt = await getBotPrompt(conv.sellerId);
+    const messages: BotMessage[] = JSON.parse(conv.messages || "[]");
+    messages.push({ role: "user", parts: [{ text }] });
+
+    const detectedDate = await parseDateFromText(text);
+    if (detectedDate) {
+      const slotsText = await getAvailableSlotsText(detectedDate);
+
+      messages.push({ role: "model", parts: [{ text: slotsText }] });
+      await db
+        .update(botConversationsTable)
+        .set({ messages: JSON.stringify(messages) })
+        .where(eq(botConversationsTable.userChatId, chatId));
+
+      await bot.sendMessage(chatId, slotsText);
+      return;
+    }
+
+    const botPrompt = await getBotPrompt();
 
     const contents = [
       { role: "user" as const, parts: [{ text: botPrompt }] },
       { role: "model" as const, parts: [{ text: "Понял, буду следовать инструкциям." }] },
-      ...conv.messages,
+      ...messages,
     ];
 
     const response = await ai.models.generateContent({
@@ -254,15 +446,22 @@ export function startTelegramBot() {
     });
 
     const replyText = response.text ?? "Минуту, уточняю информацию...";
-    conv.messages.push({ role: "model", parts: [{ text: replyText }] });
+    messages.push({ role: "model", parts: [{ text: replyText }] });
+
+    await db
+      .update(botConversationsTable)
+      .set({ messages: JSON.stringify(messages) })
+      .where(eq(botConversationsTable.userChatId, chatId));
 
     await bot.sendMessage(chatId, replyText);
 
-    const msgCount = conv.messages.filter((m) => m.role === "user").length;
-    const isReadyKeywords = /готов|оформи|заказ|беру|куплю|хочу купить|оформляем|давайте|да|согласен/i.test(text);
-    const isLongEnough = msgCount >= 3;
+    const userMessages = messages.filter((m) => m.role === "user").length;
+    const isReadyKeyword = /готов|оформи|запиши|беру|куплю|хочу купить|оформляем|давайте|да|согласен|записаться|запишите/i.test(text);
+    const timePattern = /\d{1,2}:\d{2}/.test(text);
 
-    if ((isReadyKeywords && isLongEnough) || msgCount >= 8) {
+    const shouldCreateLead = (isReadyKeyword && userMessages >= 2) || (timePattern && userMessages >= 3) || userMessages >= 10;
+
+    if (shouldCreateLead) {
       const clientName = msg.from?.username
         ? `@${msg.from.username}`
         : msg.from?.first_name ?? "Клиент из Telegram";
@@ -270,61 +469,104 @@ export function startTelegramBot() {
       const [seller] = await db
         .select()
         .from(usersTable)
-        .where(eq(usersTable.id, conv.sellerId))
+        .where(eq(usersTable.id, conv.sellerId!))
         .limit(1);
 
-      const leadData = await extractLeadFromConversation(conv.messages, clientName, botPrompt);
+      const leadData = await extractLeadFromConversation(messages, clientName);
 
       if (leadData) {
-        const [lead] = await db
-          .insert(leadsTable)
-          .values({
-            clientName,
+        let existingLead = conv.leadId
+          ? (await db.select().from(leadsTable).where(eq(leadsTable.id, conv.leadId)).limit(1))[0]
+          : null;
+
+        if (existingLead) {
+          const [updated] = await db
+            .update(leadsTable)
+            .set({
+              service: leadData.service || existingLead.service,
+              details: leadData.details || existingLead.details,
+              quantity: leadData.quantity || existingLead.quantity,
+              deadline: leadData.deadline || existingLead.deadline,
+              price: leadData.price || existingLead.price,
+              status: leadData.status,
+              isPriority: leadData.status === "hot",
+            })
+            .where(eq(leadsTable.id, existingLead.id))
+            .returning();
+          existingLead = updated;
+        } else {
+          const [newLead] = await db
+            .insert(leadsTable)
+            .values({
+              clientName,
+              platform: "Telegram",
+              service: leadData.service,
+              details: leadData.details,
+              quantity: leadData.quantity,
+              deadline: leadData.deadline,
+              price: leadData.price,
+              status: leadData.status,
+              isPriority: leadData.status === "hot",
+              recommendation:
+                leadData.status === "hot"
+                  ? "Связаться как можно быстрее — клиент готов"
+                  : leadData.status === "warm"
+                    ? "Уточнить детали и ответить на вопросы"
+                    : "Предложить скидку или альтернативный вариант",
+            })
+            .returning();
+          existingLead = newLead;
+
+          await db.insert(leadChatMessagesTable).values({
+            leadId: newLead.id,
             platform: "Telegram",
-            service: leadData.service,
-            details: leadData.details,
-            quantity: leadData.quantity,
-            deadline: leadData.deadline,
-            price: leadData.price,
-            status: leadData.status,
-            isPriority: leadData.status === "hot",
-            recommendation:
-              leadData.status === "hot"
-                ? "Связаться как можно быстрее — клиент готов купить"
-                : leadData.status === "warm"
-                  ? "Уточнить детали заказа и ответить на вопросы"
-                  : "Предложить скидку или альтернативный вариант",
-          })
-          .returning();
+            title: `Новая заявка: ${clientName}`,
+            message: [
+              `Клиент: ${clientName}`,
+              `Платформа: Telegram`,
+              `Услуга: ${newLead.service}`,
+              newLead.quantity ? `Количество: ${newLead.quantity}` : null,
+              newLead.deadline ? `Дата/Срок: ${newLead.deadline}` : null,
+              newLead.price ? `Цена: ${newLead.price}` : null,
+              newLead.details ? `Детали: ${newLead.details}` : null,
+              `Статус: ${newLead.status}`,
+            ]
+              .filter(Boolean)
+              .join("\n"),
+          });
 
-        await db.insert(leadChatMessagesTable).values({
-          leadId: lead.id,
-          platform: "Telegram",
-          title: `Новая заявка: ${clientName}`,
-          message: [
-            `Клиент: ${clientName}`,
-            `Платформа: Telegram`,
-            `Услуга: ${lead.service}`,
-            lead.quantity ? `Количество: ${lead.quantity}` : null,
-            lead.deadline ? `Срок: ${lead.deadline}` : null,
-            lead.price ? `Цена: ${lead.price}` : null,
-            lead.details ? `Детали: ${lead.details}` : null,
-            `Статус: ${lead.status}`,
-          ]
-            .filter(Boolean)
-            .join("\n"),
-        });
-
-        if (seller) {
-          await sendLeadToSeller(bot, seller, lead);
+          await upsertConversation(chatId, { leadId: newLead.id });
         }
 
-        await bot.sendMessage(
-          chatId,
-          `✅ Отлично! Ваша заявка принята. Менеджер свяжется с вами в ближайшее время.`
-        );
+        if (timePattern && leadData.deadline) {
+          const timeMatch = text.match(/(\d{1,2}:\d{2})/);
+          if (timeMatch && existingLead) {
+            const isoDate = leadData.deadline.includes("-")
+              ? leadData.deadline
+              : new Date().toISOString().split("T")[0];
 
-        conversations.delete(userId);
+            await db.insert(appointmentsTable).values({
+              leadId: existingLead.id,
+              date: isoDate,
+              timeSlot: timeMatch[1],
+              clientName,
+              clientChatId: chatId,
+              status: "booked",
+            });
+          }
+        }
+
+        if (seller && !conv.leadId) {
+          await sendLeadToSeller(bot, seller, existingLead!);
+        }
+
+        if (!conv.leadId) {
+          await bot.sendMessage(
+            chatId,
+            `✅ Отлично! Ваша заявка принята. Менеджер свяжется с вами в ближайшее время.`
+          );
+          await upsertConversation(chatId, { leadId: existingLead!.id });
+        }
       }
     }
   });
