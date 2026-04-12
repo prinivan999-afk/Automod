@@ -8,6 +8,8 @@ export const usersTable = pgTable("users", {
   apiToken: text("api_token").notNull().unique(),
   telegramChatId: text("telegram_chat_id"),
   telegramUsernameVerified: boolean("telegram_username_verified").notNull().default(false),
+  trialStartedAt: timestamp("trial_started_at", { withTimezone: true }),
+  subscriptionExpiresAt: timestamp("subscription_expires_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

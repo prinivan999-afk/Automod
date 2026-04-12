@@ -17,16 +17,21 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  ActivateLicenseBody,
   AnalyticsSummary,
   AnalyzeTariffBody,
   AnalyzeTariffResponse,
   BotAccount,
   CreateLeadBody,
   ErrorResponse,
+  GenerateLicenseBody,
+  GeneratedKeys,
+  GetLicenseStatusParams,
   GetUserProfileParams,
   HealthStatus,
   Lead,
   LeadChatMessage,
+  LicenseStatus,
   ListLeadsParams,
   PlatformCount,
   RegisterUserBody,
@@ -1527,6 +1532,275 @@ export function useGetUserProfile<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Активировать лицензионный ключ
+ */
+export const getActivateLicenseUrl = () => {
+  return `/api/license/activate`;
+};
+
+export const activateLicense = async (
+  activateLicenseBody: ActivateLicenseBody,
+  options?: RequestInit,
+): Promise<LicenseStatus> => {
+  return customFetch<LicenseStatus>(getActivateLicenseUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(activateLicenseBody),
+  });
+};
+
+export const getActivateLicenseMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof activateLicense>>,
+    TError,
+    { data: BodyType<ActivateLicenseBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof activateLicense>>,
+  TError,
+  { data: BodyType<ActivateLicenseBody> },
+  TContext
+> => {
+  const mutationKey = ["activateLicense"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof activateLicense>>,
+    { data: BodyType<ActivateLicenseBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return activateLicense(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ActivateLicenseMutationResult = NonNullable<
+  Awaited<ReturnType<typeof activateLicense>>
+>;
+export type ActivateLicenseMutationBody = BodyType<ActivateLicenseBody>;
+export type ActivateLicenseMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Активировать лицензионный ключ
+ */
+export const useActivateLicense = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof activateLicense>>,
+    TError,
+    { data: BodyType<ActivateLicenseBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof activateLicense>>,
+  TError,
+  { data: BodyType<ActivateLicenseBody> },
+  TContext
+> => {
+  return useMutation(getActivateLicenseMutationOptions(options));
+};
+
+/**
+ * @summary Статус подписки пользователя
+ */
+export const getGetLicenseStatusUrl = (params: GetLicenseStatusParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/license/status?${stringifiedParams}`
+    : `/api/license/status`;
+};
+
+export const getLicenseStatus = async (
+  params: GetLicenseStatusParams,
+  options?: RequestInit,
+): Promise<LicenseStatus> => {
+  return customFetch<LicenseStatus>(getGetLicenseStatusUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetLicenseStatusQueryKey = (
+  params?: GetLicenseStatusParams,
+) => {
+  return [`/api/license/status`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetLicenseStatusQueryOptions = <
+  TData = Awaited<ReturnType<typeof getLicenseStatus>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  params: GetLicenseStatusParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getLicenseStatus>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetLicenseStatusQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getLicenseStatus>>
+  > = ({ signal }) => getLicenseStatus(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getLicenseStatus>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetLicenseStatusQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getLicenseStatus>>
+>;
+export type GetLicenseStatusQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Статус подписки пользователя
+ */
+
+export function useGetLicenseStatus<
+  TData = Awaited<ReturnType<typeof getLicenseStatus>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  params: GetLicenseStatusParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getLicenseStatus>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetLicenseStatusQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Сгенерировать лицензионные ключи (только для администратора)
+ */
+export const getGenerateLicensesUrl = () => {
+  return `/api/license/generate`;
+};
+
+export const generateLicenses = async (
+  generateLicenseBody: GenerateLicenseBody,
+  options?: RequestInit,
+): Promise<GeneratedKeys> => {
+  return customFetch<GeneratedKeys>(getGenerateLicensesUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(generateLicenseBody),
+  });
+};
+
+export const getGenerateLicensesMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof generateLicenses>>,
+    TError,
+    { data: BodyType<GenerateLicenseBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof generateLicenses>>,
+  TError,
+  { data: BodyType<GenerateLicenseBody> },
+  TContext
+> => {
+  const mutationKey = ["generateLicenses"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof generateLicenses>>,
+    { data: BodyType<GenerateLicenseBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return generateLicenses(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type GenerateLicensesMutationResult = NonNullable<
+  Awaited<ReturnType<typeof generateLicenses>>
+>;
+export type GenerateLicensesMutationBody = BodyType<GenerateLicenseBody>;
+export type GenerateLicensesMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Сгенерировать лицензионные ключи (только для администратора)
+ */
+export const useGenerateLicenses = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof generateLicenses>>,
+    TError,
+    { data: BodyType<GenerateLicenseBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof generateLicenses>>,
+  TError,
+  { data: BodyType<GenerateLicenseBody> },
+  TContext
+> => {
+  return useMutation(getGenerateLicensesMutationOptions(options));
+};
 
 /**
  * @summary Чат уведомлений по заявкам

@@ -349,6 +349,8 @@ export const RegisterUserResponse = zod.object({
   telegramUsername: zod.string(),
   apiToken: zod.string(),
   telegramChatId: zod.string().nullish(),
+  trialStartedAt: zod.string().nullish(),
+  subscriptionExpiresAt: zod.string().nullish(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
 });
@@ -365,8 +367,55 @@ export const GetUserProfileResponse = zod.object({
   telegramUsername: zod.string(),
   apiToken: zod.string(),
   telegramChatId: zod.string().nullish(),
+  trialStartedAt: zod.string().nullish(),
+  subscriptionExpiresAt: zod.string().nullish(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
+});
+
+/**
+ * @summary Активировать лицензионный ключ
+ */
+export const ActivateLicenseBody = zod.object({
+  apiToken: zod.string(),
+  licenseKey: zod.string(),
+});
+
+export const ActivateLicenseResponse = zod.object({
+  status: zod.enum(["trial", "active", "expired", "none"]),
+  daysLeft: zod.number().nullish(),
+  expiresAt: zod.string().nullish(),
+  trialStartedAt: zod.string().nullish(),
+});
+
+/**
+ * @summary Статус подписки пользователя
+ */
+export const GetLicenseStatusQueryParams = zod.object({
+  apiToken: zod.coerce.string(),
+});
+
+export const GetLicenseStatusResponse = zod.object({
+  status: zod.enum(["trial", "active", "expired", "none"]),
+  daysLeft: zod.number().nullish(),
+  expiresAt: zod.string().nullish(),
+  trialStartedAt: zod.string().nullish(),
+});
+
+/**
+ * @summary Сгенерировать лицензионные ключи (только для администратора)
+ */
+export const generateLicensesBodyCountMax = 100;
+
+export const GenerateLicensesBody = zod.object({
+  adminSecret: zod.string(),
+  count: zod.number().min(1).max(generateLicensesBodyCountMax),
+  durationDays: zod.number().min(1),
+});
+
+export const GenerateLicensesResponse = zod.object({
+  keys: zod.array(zod.string()),
+  count: zod.number(),
 });
 
 /**

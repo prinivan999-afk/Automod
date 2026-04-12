@@ -281,8 +281,53 @@ export interface UserProfile {
   apiToken: string;
   /** @nullable */
   telegramChatId?: string | null;
+  /** @nullable */
+  trialStartedAt?: string | null;
+  /** @nullable */
+  subscriptionExpiresAt?: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ActivateLicenseBody {
+  apiToken: string;
+  licenseKey: string;
+}
+
+export interface GenerateLicenseBody {
+  adminSecret: string;
+  /**
+   * @minimum 1
+   * @maximum 100
+   */
+  count: number;
+  /** @minimum 1 */
+  durationDays: number;
+}
+
+export type LicenseStatusStatus =
+  (typeof LicenseStatusStatus)[keyof typeof LicenseStatusStatus];
+
+export const LicenseStatusStatus = {
+  trial: "trial",
+  active: "active",
+  expired: "expired",
+  none: "none",
+} as const;
+
+export interface LicenseStatus {
+  status: LicenseStatusStatus;
+  /** @nullable */
+  daysLeft?: number | null;
+  /** @nullable */
+  expiresAt?: string | null;
+  /** @nullable */
+  trialStartedAt?: string | null;
+}
+
+export interface GeneratedKeys {
+  keys: string[];
+  count: number;
 }
 
 export type ListLeadsParams = {
@@ -311,5 +356,9 @@ export const ListLeadsPlatform = {
 } as const;
 
 export type GetUserProfileParams = {
+  apiToken: string;
+};
+
+export type GetLicenseStatusParams = {
   apiToken: string;
 };

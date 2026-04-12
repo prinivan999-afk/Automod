@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from "./activateLicenseBody";
 export * from "./analyticsSummary";
 export * from "./analyzeTariffBody";
 export * from "./analyzeTariffResponse";
@@ -15,6 +16,9 @@ export * from "./createLeadBody";
 export * from "./createLeadBodyPlatform";
 export * from "./createLeadBodyStatus";
 export * from "./errorResponse";
+export * from "./generatedKeys";
+export * from "./generateLicenseBody";
+export * from "./getLicenseStatusParams";
 export * from "./getUserProfileParams";
 export * from "./healthStatus";
 export * from "./lead";
@@ -22,6 +26,8 @@ export * from "./leadChatMessage";
 export * from "./leadChatMessagePlatform";
 export * from "./leadPlatform";
 export * from "./leadStatus";
+export * from "./licenseStatus";
+export * from "./licenseStatusStatus";
 export * from "./listLeadsParams";
 export * from "./listLeadsPlatform";
 export * from "./listLeadsStatus";

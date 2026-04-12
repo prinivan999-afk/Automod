@@ -5,17 +5,14 @@
  * CRM API для управления заявками бизнеса через Telegram, Instagram и MAX
  * OpenAPI spec version: 0.1.0
  */
+import type { LicenseStatusStatus } from "./licenseStatusStatus";
 
-export interface UserProfile {
-  id: number;
-  telegramUsername: string;
-  apiToken: string;
+export interface LicenseStatus {
+  status: LicenseStatusStatus;
   /** @nullable */
-  telegramChatId?: string | null;
+  daysLeft?: number | null;
+  /** @nullable */
+  expiresAt?: string | null;
   /** @nullable */
   trialStartedAt?: string | null;
-  /** @nullable */
-  subscriptionExpiresAt?: string | null;
-  createdAt: string;
-  updatedAt: string;
 }

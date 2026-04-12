@@ -27,3 +27,4 @@ export * from "./users";
 export * from "./work-schedule";
 export * from "./appointments";
 export * from "./bot-conversations";
+export * from "./license-keys";

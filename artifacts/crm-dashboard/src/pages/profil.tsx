@@ -1,11 +1,14 @@
-import { useState } from "react";
-import { useRegisterUser, useGetUserProfile } from "@workspace/api-client-react";
+import { useState, useEffect } from "react";
+import { useRegisterUser, useGetUserProfile, useGetLicenseStatus, useActivateLicense } from "@workspace/api-client-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { MessageCircle, Copy, Check, Key, User, Send, ShieldCheck, ShieldAlert, RefreshCw } from "lucide-react";
+import {
+  MessageCircle, Copy, Check, Key, User, Send,
+  ShieldCheck, ShieldAlert, RefreshCw, Zap, Lock, Clock, Crown
+} from "lucide-react";
 import { toast } from "sonner";
 
 type Profile = {
@@ -22,12 +25,24 @@ export default function Profil() {
   });
   const [copied, setCopied] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [licenseKey, setLicenseKey] = useState("");
+  const [isStartingTrial, setIsStartingTrial] = useState(false);
 
   const registerMutation = useRegisterUser();
+  const activateLicenseMutation = useActivateLicense();
 
   const { refetch: refetchProfile } = useGetUserProfile(
     { apiToken: profile?.apiToken ?? "" },
     { query: { enabled: false } }
+  );
+
+  const {
+    data: licenseStatus,
+    refetch: refetchLicense,
+    isLoading: isLicenseLoading,
+  } = useGetLicenseStatus(
+    { apiToken: profile?.apiToken ?? "" },
+    { query: { enabled: !!profile?.apiToken, refetchInterval: 60_000 } }
   );
 
   const handleRefreshStatus = async () => {
@@ -43,6 +58,7 @@ export default function Profil() {
         };
         setProfile(updated);
         localStorage.setItem("crm_profile", JSON.stringify(updated));
+        await refetchLicense();
         if (updated.telegramUsernameVerified) {
           toast.success("Username верифицирован!");
         } else {
@@ -56,13 +72,57 @@ export default function Profil() {
     }
   };
 
+  const handleStartTrial = async () => {
+    if (!profile?.apiToken) return;
+    setIsStartingTrial(true);
+    try {
+      const res = await fetch("/api/license/start-trial", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ apiToken: profile.apiToken }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error ?? "Ошибка");
+      } else {
+        toast.success("Пробный период на 3 дня активирован!");
+        await refetchLicense();
+      }
+    } catch {
+      toast.error("Ошибка сети");
+    } finally {
+      setIsStartingTrial(false);
+    }
+  };
+
+  const handleActivateLicense = () => {
+    const key = licenseKey.trim().toUpperCase();
+    if (!key || !profile?.apiToken) {
+      toast.error("Введите лицензионный ключ");
+      return;
+    }
+    activateLicenseMutation.mutate(
+      { data: { apiToken: profile.apiToken, licenseKey: key } },
+      {
+        onSuccess: () => {
+          toast.success("Лицензия активирована!");
+          setLicenseKey("");
+          refetchLicense();
+        },
+        onError: (err: unknown) => {
+          const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+          toast.error(msg ?? "Неверный или уже использованный ключ");
+        },
+      }
+    );
+  };
+
   const handleRegister = () => {
     const clean = telegramUsername.replace(/^@/, "").trim();
     if (!clean) {
       toast.error("Введите ваш Telegram-юзернейм");
       return;
     }
-
     registerMutation.mutate(
       { data: { telegramUsername: clean } },
       {
@@ -74,7 +134,7 @@ export default function Profil() {
           };
           setProfile(newProfile);
           localStorage.setItem("crm_profile", JSON.stringify(newProfile));
-          toast.success("Профиль сохранён! Теперь верифицируйте username через бота.");
+          toast.success("Профиль сохранён!");
         },
         onError: () => {
           toast.error("Ошибка регистрации");
@@ -92,13 +152,102 @@ export default function Profil() {
 
   const isVerified = profile?.telegramUsernameVerified ?? false;
 
+  const statusConfig = {
+    trial: { label: "Пробный период", color: "text-blue-400", border: "border-blue-500/30", bg: "bg-blue-500/10", icon: Clock },
+    active: { label: "Подписка активна", color: "text-green-400", border: "border-green-500/30", bg: "bg-green-500/10", icon: Crown },
+    expired: { label: "Подписка истекла", color: "text-red-400", border: "border-red-500/30", bg: "bg-red-500/10", icon: Lock },
+    none: { label: "Нет подписки", color: "text-yellow-400", border: "border-yellow-500/30", bg: "bg-yellow-500/10", icon: Lock },
+  };
+
+  const currentStatus = licenseStatus?.status ?? "none";
+  const statusCfg = statusConfig[currentStatus as keyof typeof statusConfig] ?? statusConfig.none;
+  const StatusIcon = statusCfg.icon;
+
   return (
     <div className="space-y-6 max-w-2xl mx-auto">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Настройка профиля</h1>
-        <p className="text-muted-foreground">Подключите Telegram-бота к вашему аккаунту</p>
+        <p className="text-muted-foreground">Управление аккаунтом и подпиской AutoMind</p>
       </div>
 
+      {/* Subscription Status Card */}
+      {profile && (
+        <Card className={`border ${statusCfg.border}`}>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <StatusIcon className={`w-5 h-5 ${statusCfg.color}`} />
+              <span className={statusCfg.color}>
+                {isLicenseLoading ? "Загрузка..." : statusCfg.label}
+              </span>
+              {licenseStatus?.daysLeft != null && licenseStatus.daysLeft > 0 && (
+                <Badge variant="outline" className={`ml-auto ${statusCfg.color} ${statusCfg.border}`}>
+                  {licenseStatus.daysLeft} {licenseStatus.daysLeft === 1 ? "день" : licenseStatus.daysLeft < 5 ? "дня" : "дней"}
+                </Badge>
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {(currentStatus === "none") && (
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Начните с бесплатного пробного периода на <strong>3 дня</strong>, затем приобретите ключ за <strong>1 099 ₽</strong> на&nbsp;
+                  <a href="https://funpay.com" target="_blank" rel="noopener noreferrer" className="text-primary underline">funpay.com</a>.
+                </p>
+                <Button onClick={handleStartTrial} disabled={isStartingTrial} className="w-full">
+                  <Zap className="w-4 h-4 mr-2" />
+                  {isStartingTrial ? "Активируем..." : "Активировать 3 дня бесплатно"}
+                </Button>
+              </div>
+            )}
+
+            {currentStatus === "expired" && (
+              <div className={`rounded-md ${statusCfg.bg} border ${statusCfg.border} p-3 text-sm ${statusCfg.color}`}>
+                Пробный период завершён. Приобретите ключ за <strong>1 099 ₽</strong> на{" "}
+                <a href="https://funpay.com" target="_blank" rel="noopener noreferrer" className="underline">funpay.com</a> и введите его ниже.
+              </div>
+            )}
+
+            {currentStatus === "trial" && licenseStatus?.expiresAt && (
+              <p className="text-sm text-muted-foreground">
+                Пробный период до{" "}
+                <strong>{new Date(licenseStatus.expiresAt).toLocaleDateString("ru-RU", { day: "numeric", month: "long" })}</strong>.
+                После — потребуется ключ за 1 099 ₽.
+              </p>
+            )}
+
+            {currentStatus === "active" && licenseStatus?.expiresAt && (
+              <p className="text-sm text-muted-foreground">
+                Подписка активна до{" "}
+                <strong>{new Date(licenseStatus.expiresAt).toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" })}</strong>.
+              </p>
+            )}
+
+            {/* License Key Input */}
+            {(currentStatus === "expired" || currentStatus === "active" || currentStatus === "trial") && (
+              <div className="space-y-2 pt-1">
+                <Label className="text-xs text-muted-foreground">Ввести лицензионный ключ</Label>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="AM-XXXX-XXXX-XXXX-XXXX"
+                    value={licenseKey}
+                    onChange={(e) => setLicenseKey(e.target.value)}
+                    className="font-mono text-sm"
+                  />
+                  <Button
+                    onClick={handleActivateLicense}
+                    disabled={activateLicenseMutation.isPending || !licenseKey.trim()}
+                    variant={currentStatus === "expired" ? "default" : "outline"}
+                  >
+                    {activateLicenseMutation.isPending ? "..." : "Активировать"}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Profile Card */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -106,7 +255,7 @@ export default function Profil() {
             Ваш профиль
           </CardTitle>
           <CardDescription>
-            Укажите ваш Telegram-юзернейм. Покупатели будут писать боту, указывая ваш @username, чтобы начать диалог.
+            Укажите ваш Telegram-юзернейм. Покупатели будут писать боту, указывая ваш @username.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -153,8 +302,8 @@ export default function Profil() {
                 <div className="rounded-md border border-yellow-500/20 bg-yellow-500/5 p-3 text-sm text-yellow-600 dark:text-yellow-400 space-y-2">
                   <p className="font-medium">Требуется верификация</p>
                   <p className="text-xs">
-                    Пока username не верифицирован, покупатели не смогут найти вас через бота. Отправьте команду{" "}
-                    <code className="bg-black/10 dark:bg-white/10 px-1 rounded">/token</code> боту, чтобы подтвердить владение аккаунтом.
+                    Пока username не верифицирован, покупатели не смогут найти вас. Отправьте команду{" "}
+                    <code className="bg-black/10 dark:bg-white/10 px-1 rounded">/token</code> боту.
                   </p>
                   <Button
                     size="sm"
@@ -180,6 +329,7 @@ export default function Profil() {
         </CardContent>
       </Card>
 
+      {/* Token Card */}
       {profile && (
         <>
           <Card>
@@ -189,18 +339,13 @@ export default function Profil() {
                 API-токен и верификация
               </CardTitle>
               <CardDescription>
-                Отправьте токен боту командой <code className="bg-muted px-1 rounded text-xs">/token</code> — это подтвердит ваш Telegram username и включит уведомления о заявках.
+                Отправьте токен боту командой <code className="bg-muted px-1 rounded text-xs">/token</code> — подтвердит ваш username и включит уведомления.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center gap-2 rounded-lg border bg-muted/30 p-3 font-mono text-sm break-all">
                 <span className="flex-1 text-xs">{profile.apiToken}</span>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="shrink-0"
-                  onClick={() => handleCopy(profile.apiToken)}
-                >
+                <Button variant="ghost" size="icon" className="shrink-0" onClick={() => handleCopy(profile.apiToken)}>
                   {copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
                 </Button>
               </div>
@@ -208,25 +353,17 @@ export default function Profil() {
               <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 space-y-2">
                 <p className="text-sm font-medium flex items-center gap-2">
                   <MessageCircle className="w-4 h-4 text-blue-400" />
-                  Как верифицировать username и получать уведомления:
+                  Как верифицировать username:
                 </p>
                 <ol className="text-sm text-muted-foreground space-y-1.5 list-decimal list-inside">
-                  <li>Откройте нашего бота в Telegram</li>
-                  <li>
-                    Отправьте команду:{" "}
-                    <code className="bg-muted px-1 rounded text-xs">/token {profile.apiToken.slice(0, 8)}...</code>
-                  </li>
-                  <li>Бот прочитает ваш реальный @username из Telegram и поставит галочку «Верифицирован»</li>
-                  <li>Теперь покупатели смогут найти вас по @username, а заявки будут приходить в этот чат</li>
+                  <li>Откройте бота в Telegram</li>
+                  <li>Отправьте: <code className="bg-muted px-1 rounded text-xs">/token {profile.apiToken.slice(0, 8)}...</code></li>
+                  <li>Бот подтвердит ваш @username и включит уведомления о заявках</li>
                 </ol>
                 <div className="rounded-md border border-blue-500/20 bg-blue-500/5 p-2.5 text-xs text-blue-600 dark:text-blue-400 mt-1">
-                  🔐 Верификация гарантирует, что никто другой не может зарегистрироваться под вашим @username
+                  🔐 Верификация гарантирует, что никто не сможет зарегистрироваться под вашим @username
                 </div>
-                <Button
-                  className="w-full mt-2"
-                  onClick={() => handleCopy(`/token ${profile.apiToken}`)}
-                  variant="outline"
-                >
+                <Button className="w-full mt-2" onClick={() => handleCopy(`/token ${profile.apiToken}`)} variant="outline">
                   <Copy className="w-4 h-4 mr-2" />
                   Скопировать команду для бота
                 </Button>
@@ -239,41 +376,30 @@ export default function Profil() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Send className="w-5 h-5" />
-                  Как работает бот для ваших покупателей
+                  Как работает бот для покупателей
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-3 text-sm">
-                  <div className="flex gap-3">
-                    <span className="w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center shrink-0 text-xs font-bold">1</span>
-                    <p>В описании вашего канала или профиля разместите ссылку на бота и укажите ваш юзернейм: <strong>@{profile.telegramUsername}</strong></p>
-                  </div>
-                  <div className="flex gap-3">
-                    <span className="w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center shrink-0 text-xs font-bold">2</span>
-                    <p>Покупатель открывает бота и пишет <strong>@{profile.telegramUsername}</strong></p>
-                  </div>
-                  <div className="flex gap-3">
-                    <span className="w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center shrink-0 text-xs font-bold">3</span>
-                    <p>Gemini AI начинает диалог от имени вашего бизнеса, узнаёт детали заказа</p>
-                  </div>
-                  <div className="flex gap-3">
-                    <span className="w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center shrink-0 text-xs font-bold">4</span>
-                    <p>Когда клиент готов — заявка автоматически создаётся в CRM и приходит вам в Telegram</p>
-                  </div>
+                  {[
+                    `В описании канала разместите ссылку на бота и ваш юзернейм: @${profile.telegramUsername}`,
+                    `Покупатель открывает бота и пишет @${profile.telegramUsername}`,
+                    "Gemini AI начинает диалог и узнаёт детали заказа по вашему прайсу",
+                    "Когда клиент готов — заявка создаётся в CRM и приходит вам в Telegram",
+                  ].map((text, i) => (
+                    <div key={i} className="flex gap-3">
+                      <span className="w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center shrink-0 text-xs font-bold">{i + 1}</span>
+                      <p>{text}</p>
+                    </div>
+                  ))}
                 </div>
 
                 <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-                  <p className="font-medium text-foreground mb-1">Текст для описания канала/профиля:</p>
+                  <p className="font-medium text-foreground mb-1">Текст для описания:</p>
                   <div className="flex items-start gap-2">
-                    <p className="flex-1 font-mono text-xs">
-                      {`Для заказа напишите нашему боту и укажите @${profile.telegramUsername}`}
-                    </p>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="shrink-0 h-6 w-6"
-                      onClick={() => handleCopy(`Для заказа напишите нашему боту и укажите @${profile.telegramUsername}`)}
-                    >
+                    <p className="flex-1 font-mono text-xs">{`Для заказа напишите нашему боту и укажите @${profile.telegramUsername}`}</p>
+                    <Button variant="ghost" size="icon" className="shrink-0 h-6 w-6"
+                      onClick={() => handleCopy(`Для заказа напишите нашему боту и укажите @${profile.telegramUsername}`)}>
                       <Copy className="w-3 h-3" />
                     </Button>
                   </div>

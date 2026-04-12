@@ -5,6 +5,7 @@ import tariffRouter from "./tariff";
 import botRouter from "./bot";
 import usersRouter from "./users";
 import scheduleRouter from "./schedule";
+import licenseRouter from "./license";
 
 const router: IRouter = Router();
 
@@ -14,5 +15,6 @@ router.use(tariffRouter);
 router.use(botRouter);
 router.use(usersRouter);
 router.use(scheduleRouter);
+router.use(licenseRouter);
 
 export default router;

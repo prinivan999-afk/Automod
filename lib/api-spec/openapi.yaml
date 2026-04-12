@@ -408,6 +408,81 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /license/activate:
+    post:
+      operationId: activateLicense
+      tags: [users]
+      summary: Активировать лицензионный ключ
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ActivateLicenseBody"
+      responses:
+        "200":
+          description: Лицензия активирована
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LicenseStatus"
+        "400":
+          description: Ошибка
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /license/status:
+    get:
+      operationId: getLicenseStatus
+      tags: [users]
+      summary: Статус подписки пользователя
+      parameters:
+        - name: apiToken
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Статус подписки
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LicenseStatus"
+        "404":
+          description: Пользователь не найден
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /license/generate:
+    post:
+      operationId: generateLicenses
+      tags: [users]
+      summary: Сгенерировать лицензионные ключи (только для администратора)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenerateLicenseBody"
+      responses:
+        "200":
+          description: Ключи сгенерированы
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeneratedKeys"
+        "403":
+          description: Доступ запрещён
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /lead-chat/messages:
     get:
       operationId: listLeadChatMessages
@@ -797,6 +872,10 @@ components:
           type: string
         telegramChatId:
           type: ["string", "null"]
+        trialStartedAt:
+          type: ["string", "null"]
+        subscriptionExpiresAt:
+          type: ["string", "null"]
         createdAt:
           type: string
         updatedAt:
@@ -807,3 +886,59 @@ components:
         - apiToken
         - createdAt
         - updatedAt
+
+    ActivateLicenseBody:
+      type: object
+      properties:
+        apiToken:
+          type: string
+        licenseKey:
+          type: string
+      required:
+        - apiToken
+        - licenseKey
+
+    GenerateLicenseBody:
+      type: object
+      properties:
+        adminSecret:
+          type: string
+        count:
+          type: integer
+          minimum: 1
+          maximum: 100
+        durationDays:
+          type: integer
+          minimum: 1
+      required:
+        - adminSecret
+        - count
+        - durationDays
+
+    LicenseStatus:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [trial, active, expired, none]
+        daysLeft:
+          type: ["integer", "null"]
+        expiresAt:
+          type: ["string", "null"]
+        trialStartedAt:
+          type: ["string", "null"]
+      required:
+        - status
+
+    GeneratedKeys:
+      type: object
+      properties:
+        keys:
+          type: array
+          items:
+            type: string
+        count:
+          type: integer
+      required:
+        - keys
+        - count
