@@ -62,7 +62,7 @@ async function getSellerByUsername(username: string) {
   const [user] = await db
     .select()
     .from(usersTable)
-    .where(eq(usersTable.telegramUsername, clean))
+    .where(and(eq(usersTable.telegramUsername, clean), eq(usersTable.telegramUsernameVerified, true)))
     .limit(1);
   return user ?? null;
 }
@@ -345,14 +345,55 @@ export function startTelegramBot() {
       return;
     }
 
+    const realUsername = msg.from?.username?.toLowerCase();
+
+    if (!realUsername) {
+      await bot.sendMessage(
+        chatId,
+        `❌ Не удалось получить ваш Telegram username.\n\nУстановите username в настройках Telegram (Настройки → Изменить профиль → Имя пользователя) и попробуйте снова.`
+      );
+      return;
+    }
+
+    const updateData: Partial<typeof usersTable.$inferInsert> = {
+      telegramChatId: chatId,
+      telegramUsernameVerified: true,
+    };
+
+    if (user.telegramUsername !== realUsername) {
+      const [conflicting] = await db
+        .select()
+        .from(usersTable)
+        .where(and(eq(usersTable.telegramUsername, realUsername)))
+        .limit(1);
+
+      if (conflicting && conflicting.id !== user.id) {
+        await bot.sendMessage(
+          chatId,
+          `⚠️ Username *@${realUsername}* уже зарегистрирован другим аккаунтом.\n\nЕсли это ваш username — обратитесь в поддержку.`,
+          { parse_mode: "Markdown" }
+        );
+        return;
+      }
+
+      updateData.telegramUsername = realUsername;
+    }
+
     await db
       .update(usersTable)
-      .set({ telegramChatId: chatId })
+      .set(updateData)
       .where(eq(usersTable.id, user.id));
+
+    const finalUsername = updateData.telegramUsername ?? user.telegramUsername;
+
+    const usernameChanged = updateData.telegramUsername && updateData.telegramUsername !== user.telegramUsername;
 
     await bot.sendMessage(
       chatId,
-      `✅ Аккаунт *@${user.telegramUsername}* успешно привязан!\n\nТеперь новые заявки будут приходить сюда.`,
+      `✅ Аккаунт *@${finalUsername}* успешно верифицирован!\n\n` +
+        (usernameChanged ? `ℹ️ Username обновлён с *@${user.telegramUsername}* на *@${finalUsername}*\n\n` : "") +
+        `🔐 Ваш Telegram подтверждён — теперь покупатели могут найти вас, написав боту *@${finalUsername}*\n` +
+        `📩 Новые заявки будут приходить в этот чат.`,
       { parse_mode: "Markdown" }
     );
   });
