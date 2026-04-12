@@ -383,6 +383,7 @@ export function startTelegramBot() {
     }
 
     const realUsername = msg.from?.username?.toLowerCase();
+    const realTelegramUserId = String(msg.from!.id);
 
     if (!realUsername) {
       await bot.sendMessage(
@@ -392,8 +393,28 @@ export function startTelegramBot() {
       return;
     }
 
+    // Check if this Telegram user ID is already linked to a DIFFERENT verified account.
+    // This prevents trial abuse by changing username and re-registering.
+    const [existingByTgId] = await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.telegramUserId, realTelegramUserId))
+      .limit(1);
+
+    if (existingByTgId && existingByTgId.id !== user.id && existingByTgId.telegramUsernameVerified) {
+      await bot.sendMessage(
+        chatId,
+        `⛔ Ваш Telegram-аккаунт уже привязан к другому профилю *@${existingByTgId.telegramUsername}*.\n\n` +
+        `Один Telegram-аккаунт — один профиль AutoMind. Смена username не даёт новый пробный период.\n\n` +
+        `Используйте тот же профиль или обратитесь в поддержку.`,
+        { parse_mode: "Markdown" }
+      );
+      return;
+    }
+
     const updateData: Partial<typeof usersTable.$inferInsert> = {
       telegramChatId: chatId,
+      telegramUserId: realTelegramUserId,
       telegramUsernameVerified: true,
     };
 
