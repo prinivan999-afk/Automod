@@ -29,6 +29,7 @@ Full-stack app: React + Vite frontend (crm-dashboard), Express 5 API server, Pos
 - **Lead detail**: Full info card, recommendation block, one-click status change
 - **Add lead**: Manual lead entry form (for testing bot integration)
 - **Bot integration**: POST /api/leads endpoint accepts structured JSON from bots
+- **Tariff platforms**: Tariff setup can target Telegram, Instagram, and/or MAX bots
 
 ## Bot Integration API
 

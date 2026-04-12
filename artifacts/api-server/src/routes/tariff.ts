@@ -8,6 +8,28 @@ import {
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
+const supportedPlatforms = ["Telegram", "Instagram", "MAX"] as const;
+
+function parsePlatforms(platforms: string | null | undefined): string[] | null {
+  if (!platforms) {
+    return [...supportedPlatforms];
+  }
+
+  try {
+    const parsed = JSON.parse(platforms);
+    if (
+      Array.isArray(parsed) &&
+      parsed.length > 0 &&
+      parsed.every((platform) => supportedPlatforms.includes(platform))
+    ) {
+      return parsed;
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
 
 router.post("/tariff/analyze", async (req, res): Promise<void> => {
   const parsed = AnalyzeTariffBody.safeParse(req.body);
@@ -17,10 +39,14 @@ router.post("/tariff/analyze", async (req, res): Promise<void> => {
   }
 
   const { rawText, businessType, platforms } = parsed.data;
+  const selectedPlatforms = parsePlatforms(platforms);
 
-  const platformsList = platforms
-    ? (JSON.parse(platforms) as string[]).join(", ")
-    : "Telegram, Instagram, MAX";
+  if (!selectedPlatforms) {
+    res.status(400).json({ error: "Выберите хотя бы одну платформу: Telegram, Instagram или MAX" });
+    return;
+  }
+
+  const platformsList = selectedPlatforms.join(", ");
 
   const prompt = `Ты — помощник для анализа прайс-листов бизнеса.
 
@@ -110,19 +136,30 @@ router.post("/tariff/settings", async (req, res): Promise<void> => {
     return;
   }
 
+  const selectedPlatforms = parsePlatforms(parsed.data.platforms);
+  if (!selectedPlatforms) {
+    res.status(400).json({ error: "Выберите хотя бы одну платформу: Telegram, Instagram или MAX" });
+    return;
+  }
+
+  const settingsData = {
+    ...parsed.data,
+    platforms: JSON.stringify(selectedPlatforms),
+  };
+
   const existing = await db.select().from(tariffSettingsTable).limit(1);
 
   let saved;
   if (existing.length > 0) {
     [saved] = await db
       .update(tariffSettingsTable)
-      .set(parsed.data)
+      .set(settingsData)
       .where(eq(tariffSettingsTable.id, existing[0].id))
       .returning();
   } else {
     [saved] = await db
       .insert(tariffSettingsTable)
-      .values(parsed.data)
+      .values(settingsData)
       .returning();
   }
 

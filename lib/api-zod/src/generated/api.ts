@@ -225,6 +225,12 @@ export const AnalyzeTariffBody = zod.object({
     .string()
     .nullish()
     .describe("Тип бизнеса (например, кондитерская, фотограф)"),
+  platforms: zod
+    .string()
+    .optional()
+    .describe(
+      'JSON array of selected platforms e.g. \'[\"Telegram\",\"Instagram\",\"MAX\"]\'',
+    ),
 });
 
 export const AnalyzeTariffResponse = zod.object({

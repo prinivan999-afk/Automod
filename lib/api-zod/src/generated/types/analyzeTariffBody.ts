@@ -14,4 +14,6 @@ export interface AnalyzeTariffBody {
    * @nullable
    */
   businessType?: string | null;
+  /** JSON array of selected platforms e.g. '["Telegram","Instagram","MAX"]' */
+  platforms?: string;
 }

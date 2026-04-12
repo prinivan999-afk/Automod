@@ -503,6 +503,9 @@ components:
         businessType:
           type: ["string", "null"]
           description: Тип бизнеса (например, кондитерская, фотограф)
+        platforms:
+          type: string
+          description: JSON array of selected platforms e.g. '["Telegram","Instagram","MAX"]'
       required:
         - rawText
 

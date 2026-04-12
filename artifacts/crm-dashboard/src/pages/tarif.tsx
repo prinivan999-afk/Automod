@@ -7,9 +7,46 @@ import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Sparkles, Save, Check } from "lucide-react";
+import { Sparkles, Save, Check, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
 import { AnalyzeTariffResponse } from "@workspace/api-client-react/src/generated/api.schemas";
+
+type Platform = "Telegram" | "Instagram" | "MAX";
+
+const platformOptions: Array<{ value: Platform; label: string; description: string }> = [
+  { value: "Telegram", label: "Telegram", description: "Бот для заявок из Telegram" },
+  { value: "MAX", label: "MAX", description: "Бот для заявок из MAX" },
+  { value: "Instagram", label: "Instagram", description: "Бот для заявок из Instagram" },
+];
+
+const defaultPlatforms: Platform[] = ["Telegram", "MAX", "Instagram"];
+
+function parsePlatforms(value?: string | null): Platform[] {
+  if (!value) return defaultPlatforms;
+
+  try {
+    const parsed = JSON.parse(value);
+    if (Array.isArray(parsed)) {
+      const valid = parsed.filter((platform): platform is Platform =>
+        defaultPlatforms.includes(platform),
+      );
+      return valid.length > 0 ? valid : defaultPlatforms;
+    }
+  } catch {
+    return defaultPlatforms;
+  }
+
+  return defaultPlatforms;
+}
+
+function countTariffItems(value: string) {
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.length : 0;
+  } catch {
+    return 0;
+  }
+}
 
 export default function Tarif() {
   const queryClient = useQueryClient();
@@ -17,6 +54,7 @@ export default function Tarif() {
   
   const [rawText, setRawText] = useState("");
   const [businessType, setBusinessType] = useState("");
+  const [selectedPlatforms, setSelectedPlatforms] = useState<Platform[]>(defaultPlatforms);
   const [analyzedResult, setAnalyzedResult] = useState<AnalyzeTariffResponse | null>(null);
 
   const analyzeMutation = useAnalyzeTariff();
@@ -27,9 +65,14 @@ export default function Tarif() {
       toast.error("Введите текст прайс-листа");
       return;
     }
+
+    if (selectedPlatforms.length === 0) {
+      toast.error("Выберите хотя бы одно приложение для бота");
+      return;
+    }
     
     analyzeMutation.mutate(
-      { data: { rawText, businessType: businessType || undefined } },
+      { data: { rawText, businessType: businessType || undefined, platforms: JSON.stringify(selectedPlatforms) } },
       {
         onSuccess: (data) => {
           setAnalyzedResult(data);
@@ -45,13 +88,19 @@ export default function Tarif() {
   const handleSave = () => {
     if (!analyzedResult) return;
 
+    if (selectedPlatforms.length === 0) {
+      toast.error("Выберите хотя бы одно приложение для бота");
+      return;
+    }
+
     saveMutation.mutate(
       { 
         data: { 
           rawText, 
           businessType: analyzedResult.businessType, 
           structuredData: JSON.stringify(analyzedResult.items), 
-          botPrompt: analyzedResult.botPrompt 
+          botPrompt: analyzedResult.botPrompt,
+          platforms: JSON.stringify(selectedPlatforms),
         } 
       },
       {
@@ -64,6 +113,16 @@ export default function Tarif() {
         }
       }
     );
+  };
+
+  const togglePlatform = (platform: Platform, checked: boolean) => {
+    setSelectedPlatforms((current) => {
+      if (checked) {
+        return current.includes(platform) ? current : [...current, platform];
+      }
+
+      return current.filter((item) => item !== platform);
+    });
   };
 
   return (
@@ -88,6 +147,34 @@ export default function Tarif() {
                 value={businessType}
                 onChange={(e) => setBusinessType(e.target.value)}
               />
+            </div>
+            <div className="space-y-3">
+              <div>
+                <Label>Приложения для бота</Label>
+                <p className="text-sm text-muted-foreground">Выберите, где будет работать AI-бот с этим тарифом</p>
+              </div>
+              <div className="grid gap-3">
+                {platformOptions.map((platform) => (
+                  <label
+                    key={platform.value}
+                    className="flex cursor-pointer items-start gap-3 rounded-lg border bg-card p-3 transition-colors hover:bg-muted/50"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedPlatforms.includes(platform.value)}
+                      onChange={(event) => togglePlatform(platform.value, event.target.checked)}
+                      className="mt-1 h-4 w-4 rounded border-primary accent-primary"
+                    />
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2 font-medium">
+                        <MessageCircle className="h-4 w-4 text-primary" />
+                        {platform.label}
+                      </div>
+                      <p className="text-sm text-muted-foreground">{platform.description}</p>
+                    </div>
+                  </label>
+                ))}
+              </div>
             </div>
             <div className="space-y-2 flex-1 flex flex-col">
               <Label htmlFor="rawText">Текст прайс-листа</Label>
@@ -122,7 +209,9 @@ export default function Tarif() {
                     <Check className="w-5 h-5 text-primary" />
                     Результат анализа
                   </CardTitle>
-                  <CardDescription>Тип: {analyzedResult.businessType}</CardDescription>
+                  <CardDescription>
+                    Тип: {analyzedResult.businessType}. Приложения: {selectedPlatforms.join(", ")}
+                  </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
                   <div className="border rounded-md overflow-hidden">
@@ -188,13 +277,19 @@ export default function Tarif() {
                   <span className="text-muted-foreground">Тип бизнеса:</span> <span className="font-medium">{currentSettings.businessType}</span>
                 </div>
                 <div className="text-sm">
-                  <span className="text-muted-foreground">Распознано позиций:</span> <span className="font-medium">{JSON.parse(currentSettings.structuredData).length}</span>
+                  <span className="text-muted-foreground">Приложения:</span>{" "}
+                  <span className="font-medium">{parsePlatforms(currentSettings.platforms).join(", ")}</span>
+                </div>
+                <div className="text-sm">
+                  <span className="text-muted-foreground">Распознано позиций:</span>{" "}
+                  <span className="font-medium">{countTariffItems(currentSettings.structuredData)}</span>
                 </div>
                 <Button 
                   variant="outline" 
                   onClick={() => {
                     setRawText(currentSettings.rawText);
                     setBusinessType(currentSettings.businessType);
+                    setSelectedPlatforms(parsePlatforms(currentSettings.platforms));
                   }}
                 >
                   Загрузить в редактор
