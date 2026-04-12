@@ -12,6 +12,8 @@ export interface TariffSettings {
   businessType: string;
   structuredData: string;
   botPrompt: string;
+  /** JSON array of selected platforms e.g. '["Telegram","Instagram","MAX"]' */
+  platforms: string;
   createdAt: string;
   updatedAt: string;
 }

@@ -8,6 +8,7 @@ export const tariffSettingsTable = pgTable("tariff_settings", {
   businessType: text("business_type").notNull(),
   structuredData: text("structured_data").notNull(),
   botPrompt: text("bot_prompt").notNull(),
+  platforms: text("platforms").notNull().default('["Telegram","Instagram","MAX"]'),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

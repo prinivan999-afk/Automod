@@ -556,6 +556,9 @@ components:
           type: string
         botPrompt:
           type: string
+        platforms:
+          type: string
+          description: JSON array of selected platforms e.g. '["Telegram","Instagram","MAX"]'
         createdAt:
           type: string
         updatedAt:
@@ -566,6 +569,7 @@ components:
         - businessType
         - structuredData
         - botPrompt
+        - platforms
         - createdAt
         - updatedAt
 
@@ -580,8 +584,12 @@ components:
           type: string
         botPrompt:
           type: string
+        platforms:
+          type: string
+          description: JSON array of selected platforms e.g. '["Telegram","Instagram","MAX"]'
       required:
         - rawText
         - businessType
         - structuredData
         - botPrompt
+        - platforms

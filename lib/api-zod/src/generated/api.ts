@@ -253,6 +253,11 @@ export const GetTariffSettingsResponse = zod.object({
   businessType: zod.string(),
   structuredData: zod.string(),
   botPrompt: zod.string(),
+  platforms: zod
+    .string()
+    .describe(
+      'JSON array of selected platforms e.g. \'[\"Telegram\",\"Instagram\",\"MAX\"]\'',
+    ),
   createdAt: zod.string(),
   updatedAt: zod.string(),
 });
@@ -265,6 +270,11 @@ export const SaveTariffSettingsBody = zod.object({
   businessType: zod.string(),
   structuredData: zod.string(),
   botPrompt: zod.string(),
+  platforms: zod
+    .string()
+    .describe(
+      'JSON array of selected platforms e.g. \'[\"Telegram\",\"Instagram\",\"MAX\"]\'',
+    ),
 });
 
 export const SaveTariffSettingsResponse = zod.object({
@@ -273,6 +283,11 @@ export const SaveTariffSettingsResponse = zod.object({
   businessType: zod.string(),
   structuredData: zod.string(),
   botPrompt: zod.string(),
+  platforms: zod
+    .string()
+    .describe(
+      'JSON array of selected platforms e.g. \'[\"Telegram\",\"Instagram\",\"MAX\"]\'',
+    ),
   createdAt: zod.string(),
   updatedAt: zod.string(),
 });
