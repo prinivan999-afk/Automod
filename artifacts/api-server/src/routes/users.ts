@@ -27,7 +27,19 @@ router.post("/users/register", async (req, res): Promise<void> => {
     .limit(1);
 
   if (existing.length > 0) {
-    res.json(formatUser(existing[0]));
+    const existingUser = existing[0];
+
+    // If the account is already verified — block registration under this username.
+    // Only the real owner can log in via the Telegram bot /token command.
+    if (existingUser.telegramUsernameVerified) {
+      res.status(409).json({
+        error: `Аккаунт @${cleanUsername} уже зарегистрирован и верифицирован. Если это ваш аккаунт — восстановите доступ через Telegram-бота командой /token.`,
+      });
+      return;
+    }
+
+    // Not yet verified — safe to return so the user can complete verification
+    res.json(formatUser(existingUser));
     return;
   }
 

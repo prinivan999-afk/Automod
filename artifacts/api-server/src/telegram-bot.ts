@@ -435,6 +435,52 @@ export function startTelegramBot() {
     );
   });
 
+  // Recovery command: send /mytoken from your Telegram account to get your API token back
+  bot.onText(/\/mytoken/, async (msg) => {
+    const chatId = String(msg.chat.id);
+    const realUsername = msg.from?.username?.toLowerCase();
+
+    if (!realUsername) {
+      await bot.sendMessage(
+        chatId,
+        `❌ Не удалось получить ваш Telegram username. Установите username в настройках Telegram и попробуйте снова.`
+      );
+      return;
+    }
+
+    const [user] = await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.telegramUsername, realUsername))
+      .limit(1);
+
+    if (!user) {
+      await bot.sendMessage(
+        chatId,
+        `❌ Аккаунт *@${realUsername}* не найден. Зарегистрируйтесь в личном кабинете.`,
+        { parse_mode: "Markdown" }
+      );
+      return;
+    }
+
+    if (!user.telegramUsernameVerified) {
+      await bot.sendMessage(
+        chatId,
+        `⚠️ Аккаунт *@${realUsername}* ещё не верифицирован.\n\nОтправьте: \`/token ${user.apiToken}\``,
+        { parse_mode: "Markdown" }
+      );
+      return;
+    }
+
+    await bot.sendMessage(
+      chatId,
+      `🔑 Ваш API-токен:\n\n\`${user.apiToken}\`\n\n` +
+      `Вставьте его в профиль на сайте → раздел "Профиль" → поле API-токен.\n\n` +
+      `⚠️ Не передавайте токен третьим лицам.`,
+      { parse_mode: "Markdown" }
+    );
+  });
+
   bot.onText(/\/zapisi/, async (msg) => {
     const chatId = String(msg.chat.id);
     const conv = await getConversation(chatId);

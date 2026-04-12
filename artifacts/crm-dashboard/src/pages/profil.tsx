@@ -27,6 +27,8 @@ export default function Profil() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [licenseKey, setLicenseKey] = useState("");
   const [isStartingTrial, setIsStartingTrial] = useState(false);
+  const [showRecovery, setShowRecovery] = useState(false);
+  const [recoveryToken, setRecoveryToken] = useState("");
 
   const registerMutation = useRegisterUser();
   const activateLicenseMutation = useActivateLicense();
@@ -136,11 +138,45 @@ export default function Profil() {
           localStorage.setItem("crm_profile", JSON.stringify(newProfile));
           toast.success("Профиль сохранён!");
         },
-        onError: () => {
-          toast.error("Ошибка регистрации");
+        onError: (err: unknown) => {
+          const status = (err as any)?.response?.status;
+          if (status === 409) {
+            toast.error("Этот username уже занят верифицированным аккаунтом");
+            setShowRecovery(true);
+          } else {
+            toast.error("Ошибка регистрации");
+          }
         },
       }
     );
+  };
+
+  const handleRecoverByToken = async () => {
+    const token = recoveryToken.trim();
+    if (!token) {
+      toast.error("Введите токен");
+      return;
+    }
+    try {
+      const res = await fetch(`/api/users/profile?apiToken=${encodeURIComponent(token)}`);
+      if (!res.ok) {
+        toast.error("Токен не найден. Проверьте правильность токена.");
+        return;
+      }
+      const data = await res.json();
+      const recovered: Profile = {
+        telegramUsername: data.telegramUsername,
+        apiToken: data.apiToken,
+        telegramUsernameVerified: data.telegramUsernameVerified ?? false,
+      };
+      setProfile(recovered);
+      localStorage.setItem("crm_profile", JSON.stringify(recovered));
+      setShowRecovery(false);
+      setRecoveryToken("");
+      toast.success("Доступ восстановлен!");
+    } catch {
+      toast.error("Ошибка при восстановлении");
+    }
   };
 
   const handleCopy = (text: string) => {
@@ -277,6 +313,40 @@ export default function Profil() {
               </Button>
             </div>
           </div>
+
+          {/* Recovery block — shown when username is taken or manually opened */}
+          {showRecovery ? (
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 space-y-3">
+              <div>
+                <p className="text-sm font-semibold text-amber-400 mb-1">Восстановление доступа</p>
+                <p className="text-xs text-muted-foreground">
+                  Если это ваш аккаунт — отправьте боту <code className="bg-muted px-1 rounded">/mytoken</code> из Telegram и вставьте полученный токен:
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Вставьте API-токен из бота"
+                  value={recoveryToken}
+                  onChange={(e) => setRecoveryToken(e.target.value)}
+                  className="font-mono text-xs"
+                />
+                <Button size="sm" onClick={handleRecoverByToken}>Войти</Button>
+              </div>
+              <button
+                className="text-xs text-muted-foreground hover:text-foreground underline"
+                onClick={() => setShowRecovery(false)}
+              >
+                Отмена
+              </button>
+            </div>
+          ) : (
+            <button
+              className="text-xs text-muted-foreground hover:text-foreground underline"
+              onClick={() => setShowRecovery(true)}
+            >
+              Уже есть аккаунт? Войти по токену
+            </button>
+          )}
 
           {profile && (
             <div className="rounded-lg border bg-muted/20 p-4 space-y-3">
