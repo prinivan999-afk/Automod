@@ -1,14 +1,15 @@
-import { pgTable, text, serial, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
 export const tariffSettingsTable = pgTable("tariff_settings", {
   id: serial("id").primaryKey(),
+  userId: integer("user_id"),
   rawText: text("raw_text").notNull(),
   businessType: text("business_type").notNull(),
   structuredData: text("structured_data").notNull(),
   botPrompt: text("bot_prompt").notNull(),
-  platforms: text("platforms").notNull().default('["Telegram","Instagram","MAX"]'),
+  platforms: text("platforms").notNull().default('["Telegram"]'),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
