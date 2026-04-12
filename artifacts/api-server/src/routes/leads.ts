@@ -1,6 +1,6 @@
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type Request } from "express";
 import { eq, and, gte, lte, sql } from "drizzle-orm";
-import { db, leadsTable, leadChatMessagesTable } from "@workspace/db";
+import { db, leadsTable, leadChatMessagesTable, usersTable } from "@workspace/db";
 import {
   ListLeadsQueryParams,
   CreateLeadBody,
@@ -14,6 +14,21 @@ import {
 
 const router: IRouter = Router();
 
+async function getUserIdFromRequest(req: Request): Promise<number | null> {
+  const auth = req.headers.authorization;
+  if (!auth?.startsWith("Bearer ")) return null;
+  const token = auth.slice(7).trim();
+  if (!token) return null;
+
+  const [user] = await db
+    .select({ id: usersTable.id })
+    .from(usersTable)
+    .where(eq(usersTable.apiToken, token))
+    .limit(1);
+
+  return user?.id ?? null;
+}
+
 router.get("/leads", async (req, res): Promise<void> => {
   const parsed = ListLeadsQueryParams.safeParse(req.query);
   if (!parsed.success) {
@@ -21,9 +36,15 @@ router.get("/leads", async (req, res): Promise<void> => {
     return;
   }
 
+  const userId = await getUserIdFromRequest(req);
+  if (!userId) {
+    res.status(401).json({ error: "Требуется авторизация. Укажите apiToken в профиле." });
+    return;
+  }
+
   const { status, platform, dateFrom, dateTo } = parsed.data;
 
-  const conditions = [];
+  const conditions = [eq(leadsTable.userId, userId)];
   if (status) conditions.push(eq(leadsTable.status, status));
   if (platform) conditions.push(eq(leadsTable.platform, platform));
   if (dateFrom) conditions.push(gte(leadsTable.createdAt, new Date(dateFrom)));
@@ -32,7 +53,7 @@ router.get("/leads", async (req, res): Promise<void> => {
   const leads = await db
     .select()
     .from(leadsTable)
-    .where(conditions.length > 0 ? and(...conditions) : undefined)
+    .where(and(...conditions))
     .orderBy(leadsTable.createdAt);
 
   res.json(leads.map(formatLead));
@@ -45,12 +66,19 @@ router.post("/leads", async (req, res): Promise<void> => {
     return;
   }
 
+  const userId = await getUserIdFromRequest(req);
+  if (!userId) {
+    res.status(401).json({ error: "Требуется авторизация." });
+    return;
+  }
+
   const data = parsed.data;
   const isPriority = data.isPriority ?? (data.status === "hot");
 
   const [lead] = await db
     .insert(leadsTable)
     .values({
+      userId,
       clientName: data.clientName,
       platform: data.platform,
       service: data.service,
@@ -82,13 +110,19 @@ router.get("/leads/:id", async (req, res): Promise<void> => {
     return;
   }
 
+  const userId = await getUserIdFromRequest(req);
+  if (!userId) {
+    res.status(401).json({ error: "Требуется авторизация." });
+    return;
+  }
+
   const [lead] = await db
     .select()
     .from(leadsTable)
-    .where(eq(leadsTable.id, params.data.id));
+    .where(and(eq(leadsTable.id, params.data.id), eq(leadsTable.userId, userId)));
 
   if (!lead) {
-    res.status(404).json({ error: "Lead not found" });
+    res.status(404).json({ error: "Заявка не найдена" });
     return;
   }
 
@@ -105,6 +139,12 @@ router.patch("/leads/:id", async (req, res): Promise<void> => {
   const parsed = UpdateLeadBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  const userId = await getUserIdFromRequest(req);
+  if (!userId) {
+    res.status(401).json({ error: "Требуется авторизация." });
     return;
   }
 
@@ -125,11 +165,11 @@ router.patch("/leads/:id", async (req, res): Promise<void> => {
   const [lead] = await db
     .update(leadsTable)
     .set(updateData)
-    .where(eq(leadsTable.id, params.data.id))
+    .where(and(eq(leadsTable.id, params.data.id), eq(leadsTable.userId, userId)))
     .returning();
 
   if (!lead) {
-    res.status(404).json({ error: "Lead not found" });
+    res.status(404).json({ error: "Заявка не найдена" });
     return;
   }
 
@@ -143,13 +183,19 @@ router.delete("/leads/:id", async (req, res): Promise<void> => {
     return;
   }
 
+  const userId = await getUserIdFromRequest(req);
+  if (!userId) {
+    res.status(401).json({ error: "Требуется авторизация." });
+    return;
+  }
+
   const [lead] = await db
     .delete(leadsTable)
-    .where(eq(leadsTable.id, params.data.id))
+    .where(and(eq(leadsTable.id, params.data.id), eq(leadsTable.userId, userId)))
     .returning();
 
   if (!lead) {
-    res.status(404).json({ error: "Lead not found" });
+    res.status(404).json({ error: "Заявка не найдена" });
     return;
   }
 
@@ -169,6 +215,12 @@ router.patch("/leads/:id/status", async (req, res): Promise<void> => {
     return;
   }
 
+  const userId = await getUserIdFromRequest(req);
+  if (!userId) {
+    res.status(401).json({ error: "Требуется авторизация." });
+    return;
+  }
+
   const newStatus = parsed.data.status;
   const [lead] = await db
     .update(leadsTable)
@@ -177,18 +229,26 @@ router.patch("/leads/:id/status", async (req, res): Promise<void> => {
       isPriority: newStatus === "hot",
       recommendation: generateRecommendation(newStatus),
     })
-    .where(eq(leadsTable.id, params.data.id))
+    .where(and(eq(leadsTable.id, params.data.id), eq(leadsTable.userId, userId)))
     .returning();
 
   if (!lead) {
-    res.status(404).json({ error: "Lead not found" });
+    res.status(404).json({ error: "Заявка не найдена" });
     return;
   }
 
   res.json(formatLead(lead));
 });
 
-router.get("/analytics/summary", async (_req, res): Promise<void> => {
+router.get("/analytics/summary", async (req, res): Promise<void> => {
+  const userId = await getUserIdFromRequest(req);
+  if (!userId) {
+    res.status(401).json({ error: "Требуется авторизация." });
+    return;
+  }
+
+  const userFilter = eq(leadsTable.userId, userId);
+
   const [totals] = await db
     .select({
       total: sql<number>`count(*)::int`,
@@ -198,9 +258,10 @@ router.get("/analytics/summary", async (_req, res): Promise<void> => {
       priority: sql<number>`count(*) filter (where is_priority = true)::int`,
       today: sql<number>`count(*) filter (where created_at >= current_date)::int`,
     })
-    .from(leadsTable);
+    .from(leadsTable)
+    .where(userFilter);
 
-  const allLeads = await db.select({ price: leadsTable.price }).from(leadsTable);
+  const allLeads = await db.select({ price: leadsTable.price }).from(leadsTable).where(userFilter);
   const prices = allLeads
     .map((l) => parseFloat(l.price ?? ""))
     .filter((p) => !isNaN(p));
@@ -217,34 +278,55 @@ router.get("/analytics/summary", async (_req, res): Promise<void> => {
   });
 });
 
-router.get("/analytics/by-platform", async (_req, res): Promise<void> => {
+router.get("/analytics/by-platform", async (req, res): Promise<void> => {
+  const userId = await getUserIdFromRequest(req);
+  if (!userId) {
+    res.status(401).json({ error: "Требуется авторизация." });
+    return;
+  }
+
   const rows = await db
     .select({
       platform: leadsTable.platform,
       count: sql<number>`count(*)::int`,
     })
     .from(leadsTable)
+    .where(eq(leadsTable.userId, userId))
     .groupBy(leadsTable.platform);
 
   res.json(rows);
 });
 
-router.get("/analytics/by-status", async (_req, res): Promise<void> => {
+router.get("/analytics/by-status", async (req, res): Promise<void> => {
+  const userId = await getUserIdFromRequest(req);
+  if (!userId) {
+    res.status(401).json({ error: "Требуется авторизация." });
+    return;
+  }
+
   const rows = await db
     .select({
       status: leadsTable.status,
       count: sql<number>`count(*)::int`,
     })
     .from(leadsTable)
+    .where(eq(leadsTable.userId, userId))
     .groupBy(leadsTable.status);
 
   res.json(rows);
 });
 
-router.get("/analytics/recent", async (_req, res): Promise<void> => {
+router.get("/analytics/recent", async (req, res): Promise<void> => {
+  const userId = await getUserIdFromRequest(req);
+  if (!userId) {
+    res.status(401).json({ error: "Требуется авторизация." });
+    return;
+  }
+
   const leads = await db
     .select()
     .from(leadsTable)
+    .where(eq(leadsTable.userId, userId))
     .orderBy(leadsTable.createdAt)
     .limit(10);
 

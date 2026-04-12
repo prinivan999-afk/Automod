@@ -594,6 +594,7 @@ export function startTelegramBot() {
           const [newLead] = await db
             .insert(leadsTable)
             .values({
+              userId: seller?.id ?? null,
               clientName,
               platform: "Telegram",
               service: leadData.service,
