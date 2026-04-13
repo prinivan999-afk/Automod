@@ -69,6 +69,9 @@ export default function Tarif() {
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: getGetTariffSettingsQueryKey() });
+          setAnalyzedResult(null);
+          setRawText("");
+          setBusinessType("");
           toast.success("Настройки тарифа сохранены. Бот обновлён.");
         },
         onError: () => {
