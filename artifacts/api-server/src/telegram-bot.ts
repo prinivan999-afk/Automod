@@ -18,6 +18,22 @@ type BotMessage = { role: "user" | "model"; parts: Array<{ text: string }> };
 
 const DEFAULT_GREETING = "Здравствуйте! Я ваш дружелюбный AI-помощник. Чем могу помочь?";
 
+const CLIENT_MAIN_KEYBOARD = {
+  inline_keyboard: [
+    [
+      { text: "📋 Каталог / Услуги", callback_data: "menu_catalog" },
+      { text: "💰 Узнать цену", callback_data: "menu_price" },
+    ],
+    [
+      { text: "🛒 Оформить заказ", callback_data: "menu_order" },
+      { text: "📅 Расписание", callback_data: "menu_schedule" },
+    ],
+    [
+      { text: "📞 Связаться с менеджером", callback_data: "menu_contact" },
+    ],
+  ],
+};
+
 async function getConversation(chatId: string) {
   const [conv] = await db
     .select()
@@ -55,6 +71,29 @@ async function addMessage(chatId: string, msg: BotMessage) {
     .set({ messages: JSON.stringify(messages) })
     .where(eq(botConversationsTable.userChatId, chatId));
   return messages;
+}
+
+async function generateGreeting(botPrompt: string, priceList: string | null): Promise<string> {
+  const priceListIntro = priceList ? `\n\nПрайс-лист товаров/услуг:\n${priceList}` : "";
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: [
+        {
+          role: "user",
+          parts: [
+            {
+              text: `${botPrompt}${priceListIntro}\n\nПоздоровайся с клиентом коротко и тепло (1-2 предложения). Скажи, что можешь помочь с выбором, ценами или оформлением заказа. Не перечисляй пункты меню — клиент сам выберет кнопку.`,
+            },
+          ],
+        },
+      ],
+      config: { maxOutputTokens: 200 },
+    });
+    return response.text ?? DEFAULT_GREETING;
+  } catch {
+    return DEFAULT_GREETING;
+  }
 }
 
 async function getSellerByUsername(username: string) {
@@ -328,8 +367,12 @@ export function startTelegramBot() {
           leadId: null,
         });
 
-        const greeting = DEFAULT_GREETING;
-        await bot.sendMessage(chatId, greeting, { parse_mode: "Markdown" });
+        const { botPrompt, priceList } = await getSellerSettings(seller.id);
+        const greeting = await generateGreeting(botPrompt, priceList);
+        await bot.sendMessage(chatId, greeting, {
+          parse_mode: "Markdown",
+          reply_markup: CLIENT_MAIN_KEYBOARD,
+        });
         return;
       }
 
@@ -536,6 +579,102 @@ export function startTelegramBot() {
     );
   });
 
+  bot.on("callback_query", async (query) => {
+    const chatId = String(query.message?.chat.id);
+    const data = query.data;
+    if (!chatId || !data) return;
+
+    await bot.answerCallbackQuery(query.id);
+
+    const conv = await getConversation(chatId);
+
+    if (data === "menu_catalog") {
+      const { botPrompt, priceList } = await getSellerSettings(conv?.sellerId);
+      let reply = "";
+      if (priceList) {
+        try {
+          const response = await ai.models.generateContent({
+            model: "gemini-3-flash-preview",
+            contents: [{ role: "user", parts: [{ text: `${botPrompt}\n\nПрайс-лист:\n${priceList}\n\nКлиент нажал "Каталог". Покажи список доступных товаров/услуг красиво, с ценами. Коротко и по делу.` }] }],
+            config: { maxOutputTokens: 600 },
+          });
+          reply = response.text ?? priceList;
+        } catch {
+          reply = `📋 *Наши услуги:*\n\n${priceList}`;
+        }
+      } else {
+        reply = "📋 Каталог товаров ещё не настроен. Напишите что вас интересует — я помогу!";
+      }
+      await bot.sendMessage(chatId, reply, {
+        parse_mode: "Markdown",
+        reply_markup: {
+          inline_keyboard: [[{ text: "🛒 Оформить заказ", callback_data: "menu_order" }], [{ text: "◀️ Главное меню", callback_data: "menu_main" }]],
+        },
+      });
+    } else if (data === "menu_price") {
+      await bot.sendMessage(chatId, "💰 Напишите, что вас интересует — и я назову цену или рассчитаю стоимость.", {
+        reply_markup: { inline_keyboard: [[{ text: "◀️ Главное меню", callback_data: "menu_main" }]] },
+      });
+    } else if (data === "menu_order") {
+      await bot.sendMessage(
+        chatId,
+        "🛒 *Оформление заказа*\n\nЧто именно вы хотите заказать? Напишите название товара или услуги, и я уточню детали.",
+        {
+          parse_mode: "Markdown",
+          reply_markup: { inline_keyboard: [[{ text: "◀️ Главное меню", callback_data: "menu_main" }]] },
+        }
+      );
+    } else if (data === "menu_schedule") {
+      const schedule = await db.select().from(workScheduleTable).orderBy(workScheduleTable.dayOfWeek);
+      if (schedule.length === 0) {
+        await bot.sendMessage(chatId, "📅 Расписание ещё не настроено.", {
+          reply_markup: { inline_keyboard: [[{ text: "◀️ Главное меню", callback_data: "menu_main" }]] },
+        });
+      } else {
+        const DAY_NAMES = ["Вс", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"];
+        const scheduleText = schedule
+          .map((s) => (s.isWorking ? `${DAY_NAMES[s.dayOfWeek]}: ${s.startTime}–${s.endTime}` : `${DAY_NAMES[s.dayOfWeek]}: выходной`))
+          .join("\n");
+        await bot.sendMessage(chatId, `📅 *График работы:*\n\n${scheduleText}\n\nНапишите удобную дату — покажу свободные слоты!`, {
+          parse_mode: "Markdown",
+          reply_markup: { inline_keyboard: [[{ text: "◀️ Главное меню", callback_data: "menu_main" }]] },
+        });
+      }
+    } else if (data === "menu_contact") {
+      if (conv?.sellerUsername) {
+        await bot.sendMessage(
+          chatId,
+          `📞 Вы можете написать напрямую менеджеру: *@${conv.sellerUsername}*\n\nИли продолжайте общаться здесь — я передам вашу заявку!`,
+          {
+            parse_mode: "Markdown",
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: `💬 Написать @${conv.sellerUsername}`, url: `https://t.me/${conv.sellerUsername}` }],
+                [{ text: "◀️ Главное меню", callback_data: "menu_main" }],
+              ],
+            },
+          }
+        );
+      } else {
+        await bot.sendMessage(chatId, "Напишите что вас интересует — я передам заявку менеджеру.", {
+          reply_markup: { inline_keyboard: [[{ text: "◀️ Главное меню", callback_data: "menu_main" }]] },
+        });
+      }
+    } else if (data === "menu_main") {
+      await bot.sendMessage(chatId, "Выберите нужный раздел:", {
+        reply_markup: CLIENT_MAIN_KEYBOARD,
+      });
+    } else if (data === "confirm_order") {
+      await bot.sendMessage(chatId, "✅ Отлично! Ваша заявка подтверждена. Менеджер свяжется с вами в ближайшее время.", {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "◀️ Главное меню", callback_data: "menu_main" }],
+          ],
+        },
+      });
+    }
+  });
+
   bot.on("message", async (msg) => {
     const chatId = String(msg.chat.id);
     const userId = msg.from?.id;
@@ -568,27 +707,7 @@ export function startTelegramBot() {
       }
 
       const { botPrompt, priceList } = await getSellerSettings(seller.id);
-
-      const priceListIntro = priceList
-        ? `\n\nПрайс-лист товаров/услуг:\n${priceList}`
-        : "";
-
-      const greetingResponse = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: [
-          {
-            role: "user",
-            parts: [
-              {
-                text: `${botPrompt}${priceListIntro}\n\nПоздоровайся с клиентом. Скажи: "Здравствуйте! Я ваш дружелюбный AI-помощник." и спроси чем можешь помочь. Одно короткое сообщение.`,
-              },
-            ],
-          },
-        ],
-        config: { maxOutputTokens: 256 },
-      });
-
-      const greetText = greetingResponse.text ?? "Здравствуйте! Я ваш дружелюбный AI-помощник. Чем могу помочь?";
+      const greetText = await generateGreeting(botPrompt, priceList);
 
       conv = await upsertConversation(chatId, {
         sellerId: seller.id,
@@ -597,7 +716,9 @@ export function startTelegramBot() {
         messages: JSON.stringify([{ role: "model", parts: [{ text: greetText }] }]),
       });
 
-      await bot.sendMessage(chatId, greetText);
+      await bot.sendMessage(chatId, greetText, {
+        reply_markup: CLIENT_MAIN_KEYBOARD,
+      });
       return;
     }
 
@@ -764,7 +885,16 @@ export function startTelegramBot() {
         if (!conv.leadId) {
           await bot.sendMessage(
             chatId,
-            `✅ Отлично! Ваша заявка принята. Менеджер свяжется с вами в ближайшее время.`
+            `✅ *Заявка принята!*\n\nМенеджер свяжется с вами в ближайшее время.\n\nЕсть ещё вопросы?`,
+            {
+              parse_mode: "Markdown",
+              reply_markup: {
+                inline_keyboard: [
+                  [{ text: "✅ Подтвердить заказ", callback_data: "confirm_order" }],
+                  [{ text: "◀️ Главное меню", callback_data: "menu_main" }],
+                ],
+              },
+            }
           );
           await upsertConversation(chatId, { leadId: existingLead!.id });
         }
