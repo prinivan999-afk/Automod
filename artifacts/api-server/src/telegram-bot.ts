@@ -675,6 +675,83 @@ export function startTelegramBot() {
     }
   });
 
+  // Handle shared contacts (user taps "Share Phone Number" button)
+  bot.on("contact", async (msg) => {
+    const chatId = String(msg.chat.id);
+    const contact = msg.contact;
+    if (!contact) return;
+
+    const phone = contact.phone_number;
+    const clientName = msg.from?.username
+      ? `@${msg.from.username}`
+      : contact.first_name ?? msg.from?.first_name ?? "Клиент";
+
+    // Remove the reply keyboard
+    await bot.sendMessage(chatId, `📱 Спасибо! Номер *${phone}* получен. Передаю заявку менеджеру...`, {
+      parse_mode: "Markdown",
+      reply_markup: { remove_keyboard: true },
+    });
+
+    const conv = await getConversation(chatId);
+    if (!conv || !conv.sellerId) return;
+
+    const [seller] = await db.select().from(usersTable).where(eq(usersTable.id, conv.sellerId)).limit(1);
+    const { priceList } = await getSellerSettings(conv.sellerId);
+    const messages: BotMessage[] = JSON.parse(conv.messages || "[]");
+
+    // Add phone message to history
+    const phoneMsg = `Мой номер телефона: ${phone}`;
+    messages.push({ role: "user", parts: [{ text: phoneMsg }] });
+
+    const leadData = await extractLeadFromConversation(messages, clientName, priceList);
+    const phoneDetails = `Телефон: ${phone}`;
+
+    let existingLead = conv.leadId
+      ? (await db.select().from(leadsTable).where(eq(leadsTable.id, conv.leadId)).limit(1))[0]
+      : null;
+
+    if (existingLead) {
+      await db.update(leadsTable).set({
+        details: existingLead.details ? `${existingLead.details}\n${phoneDetails}` : phoneDetails,
+        status: "hot",
+        isPriority: true,
+      }).where(eq(leadsTable.id, existingLead.id));
+    } else {
+      const [newLead] = await db.insert(leadsTable).values({
+        userId: seller?.id ?? null,
+        clientName,
+        platform: "Telegram",
+        service: leadData?.service ?? "Запрос от клиента",
+        details: leadData?.details ? `${leadData.details}\n${phoneDetails}` : phoneDetails,
+        quantity: leadData?.quantity ?? null,
+        deadline: leadData?.deadline ?? null,
+        price: leadData?.price ?? null,
+        status: "hot",
+        isPriority: true,
+        recommendation: "Клиент оставил контакт — связаться немедленно",
+      }).returning();
+      existingLead = newLead;
+      await upsertConversation(chatId, { leadId: newLead.id });
+    }
+
+    await db.update(botConversationsTable)
+      .set({ messages: JSON.stringify(messages) })
+      .where(eq(botConversationsTable.userChatId, chatId));
+
+    if (seller) {
+      await sendLeadToSeller(bot, seller, existingLead!);
+    }
+
+    await bot.sendMessage(
+      chatId,
+      `✅ *Заявка принята!*\n\nМенеджер свяжется с вами по номеру *${phone}* в ближайшее время.`,
+      {
+        parse_mode: "Markdown",
+        reply_markup: { inline_keyboard: [[{ text: "◀️ Главное меню", callback_data: "menu_main" }]] },
+      }
+    );
+  });
+
   bot.on("message", async (msg) => {
     const chatId = String(msg.chat.id);
     const userId = msg.from?.id;
@@ -774,13 +851,27 @@ export function startTelegramBot() {
       .set({ messages: JSON.stringify(messages) })
       .where(eq(botConversationsTable.userChatId, chatId));
 
-    await bot.sendMessage(chatId, replyText);
+    // If bot is asking for phone number — show "Share Contact" reply keyboard
+    const botAsksForPhone = /номер телефона|ваш номер|поделитесь номером|укажите номер|телефон для связи|контактный номер|пришлите номер|напишите номер/i.test(replyText);
+    if (botAsksForPhone) {
+      await bot.sendMessage(chatId, replyText, {
+        reply_markup: {
+          keyboard: [[{ text: "📱 Поделиться номером телефона", request_contact: true }]],
+          one_time_keyboard: true,
+          resize_keyboard: true,
+        },
+      });
+    } else {
+      await bot.sendMessage(chatId, replyText);
+    }
 
     const userMessages = messages.filter((m) => m.role === "user").length;
     const isReadyKeyword = /готов|оформи|запиши|беру|куплю|хочу купить|оформляем|давайте|да|согласен|записаться|запишите/i.test(text);
     const timePattern = /\d{1,2}:\d{2}/.test(text);
+    // Phone number typed as text (e.g. +79991234567) — treat as lead trigger
+    const phonePattern = /(\+7|8)[\s\-]?\(?\d{3}\)?[\s\-]?\d{3}[\s\-]?\d{2}[\s\-]?\d{2}/.test(text);
 
-    const shouldCreateLead = (isReadyKeyword && userMessages >= 2) || (timePattern && userMessages >= 3) || userMessages >= 10;
+    const shouldCreateLead = (isReadyKeyword && userMessages >= 2) || (timePattern && userMessages >= 3) || phonePattern || userMessages >= 10;
 
     if (shouldCreateLead) {
       const clientName = msg.from?.username
@@ -795,6 +886,10 @@ export function startTelegramBot() {
 
       const leadData = await extractLeadFromConversation(messages, clientName, priceList);
 
+      // Extract phone number from text if present
+      const phoneMatch = text.match(/(\+7|8)[\s\-]?\(?\d{3}\)?[\s\-]?\d{3}[\s\-]?\d{2}[\s\-]?\d{2}/);
+      const phoneExtra = phoneMatch ? `\nТелефон: ${phoneMatch[0]}` : "";
+
       if (leadData) {
         let existingLead = conv.leadId
           ? (await db.select().from(leadsTable).where(eq(leadsTable.id, conv.leadId)).limit(1))[0]
@@ -805,12 +900,12 @@ export function startTelegramBot() {
             .update(leadsTable)
             .set({
               service: leadData.service || existingLead.service,
-              details: leadData.details || existingLead.details,
+              details: (leadData.details || existingLead.details || "") + phoneExtra,
               quantity: leadData.quantity || existingLead.quantity,
               deadline: leadData.deadline || existingLead.deadline,
               price: leadData.price || existingLead.price,
-              status: leadData.status,
-              isPriority: leadData.status === "hot",
+              status: phonePattern ? "hot" : leadData.status,
+              isPriority: phonePattern || leadData.status === "hot",
             })
             .where(eq(leadsTable.id, existingLead.id))
             .returning();
@@ -823,14 +918,15 @@ export function startTelegramBot() {
               clientName,
               platform: "Telegram",
               service: leadData.service,
-              details: leadData.details,
+              details: (leadData.details ?? "") + phoneExtra,
               quantity: leadData.quantity,
               deadline: leadData.deadline,
               price: leadData.price,
-              status: leadData.status,
-              isPriority: leadData.status === "hot",
-              recommendation:
-                leadData.status === "hot"
+              status: phonePattern ? "hot" : leadData.status,
+              isPriority: phonePattern || leadData.status === "hot",
+              recommendation: phonePattern
+                ? "Клиент оставил номер телефона — связаться немедленно"
+                : leadData.status === "hot"
                   ? "Связаться как можно быстрее — клиент готов"
                   : leadData.status === "warm"
                     ? "Уточнить детали и ответить на вопросы"
