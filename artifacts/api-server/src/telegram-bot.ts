@@ -584,7 +584,13 @@ export function startTelegramBot() {
     const data = query.data;
     if (!chatId || !data) return;
 
-    await bot.answerCallbackQuery(query.id);
+    try {
+      await bot.answerCallbackQuery(query.id);
+    } catch {
+      // Ignore if already answered
+    }
+
+    try {
 
     const conv = await getConversation(chatId);
 
@@ -595,22 +601,26 @@ export function startTelegramBot() {
         try {
           const response = await ai.models.generateContent({
             model: "gemini-3-flash-preview",
-            contents: [{ role: "user", parts: [{ text: `${botPrompt}\n\nПрайс-лист:\n${priceList}\n\nКлиент нажал "Каталог". Покажи список доступных товаров/услуг красиво, с ценами. Коротко и по делу.` }] }],
+            contents: [{ role: "user", parts: [{ text: `${botPrompt}\n\nПрайс-лист:\n${priceList}\n\nКлиент нажал "Каталог". Покажи список доступных товаров/услуг с ценами. Используй ТОЛЬКО обычный текст без звёздочек, подчёркиваний, скобок и других символов форматирования. Коротко и понятно.` }] }],
             config: { maxOutputTokens: 600 },
           });
           reply = response.text ?? priceList;
         } catch {
-          reply = `📋 *Наши услуги:*\n\n${priceList}`;
+          reply = `📋 Наши услуги:\n\n${priceList}`;
         }
       } else {
         reply = "📋 Каталог товаров ещё не настроен. Напишите что вас интересует — я помогу!";
       }
-      await bot.sendMessage(chatId, reply, {
-        parse_mode: "Markdown",
-        reply_markup: {
-          inline_keyboard: [[{ text: "🛒 Оформить заказ", callback_data: "menu_order" }], [{ text: "◀️ Главное меню", callback_data: "menu_main" }]],
-        },
-      });
+      try {
+        await bot.sendMessage(chatId, reply, {
+          reply_markup: {
+            inline_keyboard: [[{ text: "🛒 Оформить заказ", callback_data: "menu_order" }], [{ text: "◀️ Главное меню", callback_data: "menu_main" }]],
+          },
+        });
+      } catch {
+        // Fallback: send as plain text without keyboard if message fails
+        await bot.sendMessage(chatId, reply.replace(/[*_`[\]()]/g, ""));
+      }
     } else if (data === "menu_price") {
       await bot.sendMessage(chatId, "💰 Напишите, что вас интересует — и я назову цену или рассчитаю стоимость.", {
         reply_markup: { inline_keyboard: [[{ text: "◀️ Главное меню", callback_data: "menu_main" }]] },
@@ -672,6 +682,12 @@ export function startTelegramBot() {
           ],
         },
       });
+    }
+    } catch (e) {
+      console.error("[TelegramBot] callback_query error:", e);
+      try {
+        await bot.sendMessage(chatId, "Произошла ошибка. Попробуйте ещё раз.");
+      } catch {}
     }
   });
 
