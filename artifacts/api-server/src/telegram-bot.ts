@@ -748,6 +748,28 @@ export function startTelegramBot() {
       }).returning();
       existingLead = newLead;
       await upsertConversation(chatId, { leadId: newLead.id });
+
+      await db.insert(leadChatMessagesTable).values({
+        leadId: newLead.id,
+        platform: "Telegram",
+        title: `📱 Новая заявка с контактом: ${clientName}`,
+        message: [
+          `Клиент: ${clientName}`,
+          `Платформа: Telegram`,
+          `Телефон: ${phone}`,
+          newLead.service ? `Услуга: ${newLead.service}` : null,
+          newLead.details ? `Детали: ${newLead.details}` : null,
+          `Статус: Горячий`,
+        ].filter(Boolean).join("\n"),
+      });
+    } else {
+      // Update existing lead: also add a chat message for the phone update
+      await db.insert(leadChatMessagesTable).values({
+        leadId: existingLead!.id,
+        platform: "Telegram",
+        title: `📱 Клиент ${clientName} оставил номер телефона`,
+        message: `Клиент: ${clientName}\nТелефон: ${phone}\nСтатус обновлён: Горячий`,
+      });
     }
 
     await db.update(botConversationsTable)
