@@ -289,14 +289,18 @@ ${priceListSection}
 ${conversationText}
 """
 
-Извлеки информацию о заявке. ${priceList ? 'Поле "service" должно содержать ТОЧНОЕ название услуги из прайс-листа (если клиент выбрал что-то из него). Если услуга не из прайса — напиши кратко что хочет клиент.' : 'Поле "service" — что хочет клиент (кратко, 2-5 слов).'}
+Извлеки информацию о заявке. Важные правила:
+- Поле "service": ТОЛЬКО то, что клиент явно подтвердил сам. Не включай услуги, которые бот предлагал, но клиент не подтвердил. ${priceList ? 'Используй ТОЧНОЕ название из прайса.' : 'Краткое описание 2-5 слов.'}
+- Поле "details": кратко о пожеланиях или особенностях клиента (НЕ включай номер телефона и НЕ включай имя клиента — они хранятся отдельно). Если нечего добавить — null.
+- Поле "deadline": дата и время если клиент подтвердил, иначе null.
+- Поле "price": цена ТОЛЬКО выбранной клиентом услуги, иначе null.
 Верни ТОЛЬКО JSON (без markdown):
 {
-  "service": "точное название услуги из прайса или краткое описание (2-5 слов)",
-  "details": "подробности, пожелания клиента или null",
+  "service": "только подтверждённая услуга",
+  "details": "краткие пожелания или null",
   "quantity": "количество или null",
   "deadline": "дата/срок или null",
-  "price": "цена из прайса если выбрана конкретная услуга, иначе цена если называлась или null",
+  "price": "цена выбранной услуги или null",
   "status": "hot если клиент готов и выбрал время, warm если интересуется, cold если просто смотрит"
 }`;
 
@@ -944,7 +948,7 @@ export function startTelegramBot() {
 
       // Extract phone number from text if present
       const phoneMatch = text.match(/(\+7|8)[\s\-]?\(?\d{3}\)?[\s\-]?\d{3}[\s\-]?\d{2}[\s\-]?\d{2}/);
-      const phoneExtra = phoneMatch ? `\nТелефон: ${phoneMatch[0]}` : "";
+      const phoneNumber = phoneMatch ? phoneMatch[0] : null;
 
       // Use fallback if AI couldn't extract lead data
       const effectiveLeadData = leadData ?? {
@@ -966,7 +970,11 @@ export function startTelegramBot() {
             .update(leadsTable)
             .set({
               service: effectiveLeadData.service || existingLead.service,
-              details: (effectiveLeadData.details || existingLead.details || "") + phoneExtra,
+              details: (() => {
+                const base = effectiveLeadData.details || existingLead.details || "";
+                if (phoneNumber && !base.includes(phoneNumber)) return base + `\nТелефон: ${phoneNumber}`;
+                return base || null;
+              })(),
               quantity: effectiveLeadData.quantity || existingLead.quantity,
               deadline: effectiveLeadData.deadline || existingLead.deadline,
               price: effectiveLeadData.price || existingLead.price,
@@ -984,7 +992,11 @@ export function startTelegramBot() {
               clientName,
               platform: "Telegram",
               service: effectiveLeadData.service,
-              details: (effectiveLeadData.details ?? "") + phoneExtra,
+              details: (() => {
+                const base = effectiveLeadData.details ?? "";
+                if (phoneNumber && !base.includes(phoneNumber)) return base + `\nТелефон: ${phoneNumber}`;
+                return base || null;
+              })(),
               quantity: effectiveLeadData.quantity,
               deadline: effectiveLeadData.deadline,
               price: effectiveLeadData.price,
