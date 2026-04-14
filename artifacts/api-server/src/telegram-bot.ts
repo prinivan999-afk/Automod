@@ -88,7 +88,7 @@ async function generateGreeting(botPrompt: string, priceList: string | null): Pr
           ],
         },
       ],
-      config: { maxOutputTokens: 200 },
+      config: { maxOutputTokens: 512 },
     });
     return response.text ?? DEFAULT_GREETING;
   } catch {
