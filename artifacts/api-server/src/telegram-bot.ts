@@ -88,7 +88,7 @@ async function generateGreeting(botPrompt: string, priceList: string | null): Pr
           ],
         },
       ],
-      config: { maxOutputTokens: 512 },
+      config: { maxOutputTokens: 8192 },
     });
     return response.text ?? DEFAULT_GREETING;
   } catch {
@@ -615,7 +615,7 @@ export function startTelegramBot() {
           const response = await ai.models.generateContent({
             model: "gemini-3-flash-preview",
             contents: [{ role: "user", parts: [{ text: `${botPrompt}\n\nПрайс-лист:\n${priceList}\n\nКлиент нажал "Каталог". Покажи список доступных товаров/услуг с ценами. Используй ТОЛЬКО обычный текст без звёздочек, подчёркиваний, скобок и других символов форматирования. Коротко и понятно.` }] }],
-            config: { maxOutputTokens: 600 },
+            config: { maxOutputTokens: 8192 },
           });
           reply = response.text ?? priceList;
         } catch {
