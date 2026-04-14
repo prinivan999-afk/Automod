@@ -263,20 +263,26 @@ async function getAvailableSlotsText(dateStr: string): Promise<string> {
   return `Свободное время на ${formatted}:\n${freeSlots.map((s) => `🕐 ${s}`).join("\n")}\n\nВыберите удобное время!`;
 }
 
+function hasWord(text: string, word: string): boolean {
+  // \b doesn't work with Cyrillic in JS; use space/start/end/punctuation as boundaries
+  const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(?:^|[\\s,.:;!?«»()\\-])${escaped}(?:[\\s,.:;!?«»()\\-]|$)`).test(text) || text === word;
+}
+
 async function parseDateFromText(text: string): Promise<string | null> {
   const lower = text.toLowerCase();
 
-  // Relative dates
+  // Relative dates — check "послезавтра" before "завтра" to avoid substring match
   const today = new Date();
-  if (/\bсегодня\b/.test(lower)) return today.toISOString().split("T")[0];
-  if (/\bзавтра\b/.test(lower)) {
-    const d = new Date(today);
-    d.setDate(d.getDate() + 1);
-    return d.toISOString().split("T")[0];
-  }
-  if (/\bпослезавтра\b/.test(lower)) {
+  if (hasWord(lower, "послезавтра")) {
     const d = new Date(today);
     d.setDate(d.getDate() + 2);
+    return d.toISOString().split("T")[0];
+  }
+  if (hasWord(lower, "сегодня")) return today.toISOString().split("T")[0];
+  if (hasWord(lower, "завтра")) {
+    const d = new Date(today);
+    d.setDate(d.getDate() + 1);
     return d.toISOString().split("T")[0];
   }
 
