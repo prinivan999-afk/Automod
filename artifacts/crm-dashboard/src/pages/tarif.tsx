@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Sparkles, Save, Check } from "lucide-react";
+import { Sparkles, Save, Check, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { AnalyzeTariffResponse } from "@workspace/api-client-react/src/generated/api.schemas";
 
@@ -118,16 +118,23 @@ export default function Tarif() {
             </div>
           </CardContent>
           {(!analyzedResult || rawText !== lastAnalyzedText) && (
-            <CardFooter>
+            <CardFooter className="flex-col gap-2">
               <Button 
                 onClick={handleAnalyze} 
                 disabled={analyzeMutation.isPending || !rawText.trim()}
                 className="w-full"
               >
-                {analyzeMutation.isPending ? "Анализируем..." : (
+                {analyzeMutation.isPending ? (
+                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Анализируем... до 30 сек</>
+                ) : (
                   <><Sparkles className="w-4 h-4 mr-2" /> Анализировать через AI</>
                 )}
               </Button>
+              {analyzeMutation.isPending && (
+                <p className="text-xs text-muted-foreground text-center">
+                  AI обрабатывает ваш прайс-лист — пожалуйста, подождите
+                </p>
+              )}
             </CardFooter>
           )}
         </Card>

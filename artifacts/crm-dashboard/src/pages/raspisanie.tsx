@@ -14,6 +14,16 @@ const BASE_URL = import.meta.env.BASE_URL.replace(/\/$/, "");
 const DAY_NAMES = ["Воскресенье", "Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота"];
 const DAY_SHORT = ["Вс", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"];
 
+function getAuthHeaders(): Record<string, string> {
+  try {
+    const saved = localStorage.getItem("crm_profile");
+    if (!saved) return {};
+    const profile = JSON.parse(saved);
+    if (profile?.apiToken) return { Authorization: `Bearer ${profile.apiToken}` };
+  } catch {}
+  return {};
+}
+
 interface ScheduleDay {
   id?: number;
   dayOfWeek: number;
@@ -55,7 +65,7 @@ export default function Raspisanie() {
 
   const loadSchedule = async () => {
     try {
-      const res = await fetch(`${BASE_URL}/api/schedule`);
+      const res = await fetch(`${BASE_URL}/api/schedule`, { headers: getAuthHeaders() });
       if (res.ok) {
         const data = await res.json();
         if (data.length > 0) setSchedule(data);
@@ -69,7 +79,7 @@ export default function Raspisanie() {
 
   const loadAppointments = async () => {
     try {
-      const res = await fetch(`${BASE_URL}/api/appointments`);
+      const res = await fetch(`${BASE_URL}/api/appointments`, { headers: getAuthHeaders() });
       if (res.ok) {
         const data = await res.json();
         setAppointments(data);
@@ -84,7 +94,7 @@ export default function Raspisanie() {
     try {
       const res = await fetch(`${BASE_URL}/api/schedule`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         body: JSON.stringify({ days: schedule }),
       });
       if (res.ok) {
@@ -101,7 +111,10 @@ export default function Raspisanie() {
 
   const handleDeleteAppointment = async (id: number) => {
     try {
-      const res = await fetch(`${BASE_URL}/api/appointments/${id}`, { method: "DELETE" });
+      const res = await fetch(`${BASE_URL}/api/appointments/${id}`, {
+        method: "DELETE",
+        headers: getAuthHeaders(),
+      });
       if (res.ok) {
         setAppointments((prev) => prev.filter((a) => a.id !== id));
         toast.success("Запись удалена");
