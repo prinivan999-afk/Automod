@@ -511,17 +511,39 @@ export function startAppointmentCleanupJob() {
   console.log("[Cleanup] Appointment cleanup job started (every 5 min)");
 }
 
-export function startTelegramBot() {
+export async function startTelegramBot() {
   if (!BOT_TOKEN) {
     console.warn("[TelegramBot] TELEGRAM_BOT_TOKEN not set, bot disabled");
     return null;
   }
 
-  // Clear any existing webhook to avoid 409 conflicts on restart
-  fetch(`https://api.telegram.org/bot${BOT_TOKEN}/deleteWebhook?drop_pending_updates=false`)
-    .catch(() => {});
+  // Delete any existing webhook and drop pending updates to prevent duplicates on restart
+  try {
+    await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/deleteWebhook?drop_pending_updates=true`);
+  } catch {}
+
+  // Wait briefly to allow old polling connections to terminate
+  await new Promise((resolve) => setTimeout(resolve, 2000));
 
   const bot = new TelegramBot(BOT_TOKEN, { polling: true });
+
+  // Deduplicate updates to prevent processing the same message twice
+  // (can happen when multiple instances briefly overlap during restart)
+  const seenUpdateIds = new Set<number>();
+  const originalProcessUpdate = (bot as any).processUpdate.bind(bot);
+  (bot as any).processUpdate = (update: any) => {
+    if (seenUpdateIds.has(update.update_id)) {
+      console.log(`[TelegramBot] Skipping duplicate update ${update.update_id}`);
+      return;
+    }
+    seenUpdateIds.add(update.update_id);
+    // Keep the set bounded to avoid memory leaks (keep last 500 IDs)
+    if (seenUpdateIds.size > 500) {
+      const first = seenUpdateIds.values().next().value;
+      seenUpdateIds.delete(first!);
+    }
+    originalProcessUpdate(update);
+  };
 
   bot.onText(/\/start(?:\s+(\S+))?/, async (msg, match) => {
     const chatId = String(msg.chat.id);

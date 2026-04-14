@@ -1,6 +1,7 @@
 import app from "./app";
 import { logger } from "./lib/logger";
 import { startTelegramBot, startAppointmentCleanupJob } from "./telegram-bot";
+import TelegramBot from "node-telegram-bot-api";
 
 const rawPort = process.env["PORT"];
 
@@ -24,11 +25,12 @@ app.listen(port, (err) => {
 
   logger.info({ port }, "Server listening");
   startAppointmentCleanupJob();
-  const bot = startTelegramBot();
+
+  let botInstance: TelegramBot | null = null;
 
   const shutdown = () => {
-    if (bot) {
-      bot.stopPolling().finally(() => process.exit(0));
+    if (botInstance) {
+      botInstance.stopPolling().finally(() => process.exit(0));
     } else {
       process.exit(0);
     }
@@ -36,4 +38,12 @@ app.listen(port, (err) => {
 
   process.on("SIGTERM", shutdown);
   process.on("SIGINT", shutdown);
+
+  startTelegramBot()
+    .then((bot) => {
+      botInstance = bot;
+    })
+    .catch((err) => {
+      logger.error({ err }, "Failed to start Telegram bot");
+    });
 });
