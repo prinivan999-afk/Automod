@@ -2,8 +2,11 @@ import { boolean, integer, pgTable, serial, text, timestamp } from "drizzle-orm/
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
+import { usersTable } from "./users";
+
 export const workScheduleTable = pgTable("work_schedule", {
   id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => usersTable.id, { onDelete: "cascade" }),
   dayOfWeek: integer("day_of_week").notNull(),
   isWorking: boolean("is_working").notNull().default(true),
   startTime: text("start_time").notNull().default("09:00"),

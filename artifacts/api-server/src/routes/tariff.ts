@@ -1,11 +1,12 @@
 import { Router, type IRouter } from "express";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { db, tariffSettingsTable } from "@workspace/db";
 import { ai } from "@workspace/integrations-gemini-ai";
 import {
   AnalyzeTariffBody,
   SaveTariffSettingsBody,
 } from "@workspace/api-zod";
+import { getUserIdFromRequest } from "./auth-helper";
 
 const router: IRouter = Router();
 const supportedPlatforms = ["Telegram", "Instagram", "MAX"] as const;
@@ -115,9 +116,16 @@ ${rawText}
 });
 
 router.get("/tariff/settings", async (req, res): Promise<void> => {
+  const userId = await getUserIdFromRequest(req);
+  if (!userId) {
+    res.status(401).json({ error: "Требуется авторизация." });
+    return;
+  }
+
   const [settings] = await db
     .select()
     .from(tariffSettingsTable)
+    .where(eq(tariffSettingsTable.userId, userId))
     .orderBy(tariffSettingsTable.updatedAt)
     .limit(1);
 
@@ -130,6 +138,12 @@ router.get("/tariff/settings", async (req, res): Promise<void> => {
 });
 
 router.post("/tariff/settings", async (req, res): Promise<void> => {
+  const userId = await getUserIdFromRequest(req);
+  if (!userId) {
+    res.status(401).json({ error: "Требуется авторизация." });
+    return;
+  }
+
   const parsed = SaveTariffSettingsBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -144,17 +158,22 @@ router.post("/tariff/settings", async (req, res): Promise<void> => {
 
   const settingsData = {
     ...parsed.data,
+    userId,
     platforms: JSON.stringify(selectedPlatforms),
   };
 
-  const existing = await db.select().from(tariffSettingsTable).limit(1);
+  const existing = await db
+    .select()
+    .from(tariffSettingsTable)
+    .where(eq(tariffSettingsTable.userId, userId))
+    .limit(1);
 
   let saved;
   if (existing.length > 0) {
     [saved] = await db
       .update(tariffSettingsTable)
       .set(settingsData)
-      .where(eq(tariffSettingsTable.id, existing[0].id))
+      .where(and(eq(tariffSettingsTable.id, existing[0].id), eq(tariffSettingsTable.userId, userId)))
       .returning();
   } else {
     [saved] = await db

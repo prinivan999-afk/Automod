@@ -3,9 +3,11 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
 import { leadsTable } from "./leads";
+import { usersTable } from "./users";
 
 export const appointmentsTable = pgTable("appointments", {
   id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => usersTable.id, { onDelete: "cascade" }),
   leadId: integer("lead_id").references(() => leadsTable.id, { onDelete: "set null" }),
   date: text("date").notNull(),
   timeSlot: text("time_slot").notNull(),
