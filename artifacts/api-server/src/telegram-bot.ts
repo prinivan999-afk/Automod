@@ -1113,6 +1113,7 @@ export async function startTelegramBot() {
 
       // Create appointment
       await db.insert(appointmentsTable).values({
+        userId: seller?.id ?? null,
         leadId,
         date: dateToBook,
         timeSlot,
@@ -1218,6 +1219,7 @@ export async function startTelegramBot() {
         }
 
         await db.insert(appointmentsTable).values({
+          userId: seller?.id ?? null,
           leadId,
           date: detectedDate,
           timeSlot,
@@ -1462,6 +1464,7 @@ export async function startTelegramBot() {
               const slotAlreadyTaken = await isSlotBooked(finalDate, finalTimeSlot);
               if (!slotAlreadyTaken) {
                 await db.insert(appointmentsTable).values({
+                  userId: seller?.id ?? null,
                   leadId: existingLead.id,
                   date: finalDate,
                   timeSlot: finalTimeSlot,
