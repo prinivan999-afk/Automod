@@ -22,7 +22,7 @@ function countTariffItems(value: string) {
 
 export default function Tarif() {
   const queryClient = useQueryClient();
-  const { data: currentSettings } = useGetTariffSettings();
+  const { data: currentSettings } = useGetTariffSettings({ query: { staleTime: 0 } });
   
   const [rawText, setRawText] = useState("");
   const [businessType, setBusinessType] = useState("");
