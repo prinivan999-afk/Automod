@@ -732,6 +732,13 @@ export function startTelegramBot() {
         status: "hot",
         isPriority: true,
       }).where(eq(leadsTable.id, existingLead.id));
+
+      await db.insert(leadChatMessagesTable).values({
+        leadId: existingLead.id,
+        platform: "Telegram",
+        title: `📱 Клиент ${clientName} оставил номер телефона`,
+        message: `Клиент: ${clientName}\nТелефон: ${phone}\nСтатус обновлён: Горячий`,
+      });
     } else {
       const [newLead] = await db.insert(leadsTable).values({
         userId: seller?.id ?? null,
@@ -761,14 +768,6 @@ export function startTelegramBot() {
           newLead.details ? `Детали: ${newLead.details}` : null,
           `Статус: Горячий`,
         ].filter(Boolean).join("\n"),
-      });
-    } else {
-      // Update existing lead: also add a chat message for the phone update
-      await db.insert(leadChatMessagesTable).values({
-        leadId: existingLead!.id,
-        platform: "Telegram",
-        title: `📱 Клиент ${clientName} оставил номер телефона`,
-        message: `Клиент: ${clientName}\nТелефон: ${phone}\nСтатус обновлён: Горячий`,
       });
     }
 
