@@ -1249,6 +1249,31 @@ export function startTelegramBot() {
         status: isReadyKeyword ? "hot" : "warm",
       };
 
+      // Check if the AI-extracted deadline slot is already booked before creating a lead
+      if (!conv.leadId && effectiveLeadData.deadline) {
+        const dlTimeMatch = effectiveLeadData.deadline.match(/(\d{1,2}:\d{2})/);
+        if (dlTimeMatch) {
+          const dlDate = await parseDateFromText(effectiveLeadData.deadline);
+          if (dlDate) {
+            const slotTakenForLead = await isSlotBooked(dlDate, dlTimeMatch[1]);
+            if (slotTakenForLead) {
+              const freeAlts = await getNextAvailableSlots(dlDate);
+              const dateObjAlt = new Date(dlDate);
+              const formattedAlt = dateObjAlt.toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
+              const conflictMsg = freeAlts.length > 0
+                ? `К сожалению, время ${dlTimeMatch[1]} на ${formattedAlt} уже занято другим клиентом.\n\nВот ближайшие свободные слоты:\n${freeAlts.map((s) => `🕐 ${s}`).join("\n")}\n\nВыберите другое удобное время!`
+                : `К сожалению, время ${dlTimeMatch[1]} на ${formattedAlt} уже занято, и других свободных слотов на этот день нет. Пожалуйста, выберите другую дату.`;
+              messages.push({ role: "model", parts: [{ text: conflictMsg }] });
+              await db.update(botConversationsTable)
+                .set({ messages: JSON.stringify(messages) })
+                .where(eq(botConversationsTable.userChatId, chatId));
+              await bot.sendMessage(chatId, conflictMsg);
+              return;
+            }
+          }
+        }
+      }
+
       {
         let existingLead = conv.leadId
           ? (await db.select().from(leadsTable).where(eq(leadsTable.id, conv.leadId)).limit(1))[0]
