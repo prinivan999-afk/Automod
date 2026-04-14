@@ -316,12 +316,14 @@ ${conversationText}
 async function sendLeadToSeller(
   bot: TelegramBot,
   seller: typeof usersTable.$inferSelect,
-  lead: typeof leadsTable.$inferSelect
-) {
-  if (!seller.telegramChatId) return;
+  lead: typeof leadsTable.$inferSelect,
+  existingMsgId?: number | null
+): Promise<number | null> {
+  if (!seller.telegramChatId) return null;
 
+  const statusLabel = lead.status === "hot" ? "Горячий 🔥" : lead.status === "warm" ? "Тёплый" : "Холодный";
   const msg = [
-    `🆕 *Новая заявка из Telegram*`,
+    `🆕 *Заявка из Telegram*`,
     ``,
     `👤 Клиент: ${lead.clientName}`,
     `📦 Услуга: ${lead.service}`,
@@ -330,15 +332,26 @@ async function sendLeadToSeller(
     lead.price ? `💰 Цена: ${lead.price}` : null,
     lead.details ? `📝 Детали: ${lead.details}` : null,
     ``,
-    `🔥 Статус: ${lead.status === "hot" ? "Горячий" : lead.status === "warm" ? "Тёплый" : "Холодный"}`,
+    `Статус: ${statusLabel}`,
   ]
     .filter((l) => l !== null)
     .join("\n");
 
   try {
-    await bot.sendMessage(seller.telegramChatId, msg, { parse_mode: "Markdown" });
+    if (existingMsgId) {
+      await bot.editMessageText(msg, {
+        chat_id: seller.telegramChatId,
+        message_id: existingMsgId,
+        parse_mode: "Markdown",
+      });
+      return existingMsgId;
+    } else {
+      const sent = await bot.sendMessage(seller.telegramChatId, msg, { parse_mode: "Markdown" });
+      return sent.message_id;
+    }
   } catch (e) {
-    console.error("[TelegramBot] Failed to send lead to seller:", e);
+    console.error("[TelegramBot] Failed to send/edit lead to seller:", e);
+    return null;
   }
 }
 
@@ -776,14 +789,16 @@ export function startTelegramBot() {
       .where(eq(botConversationsTable.userChatId, chatId));
 
     if (seller) {
-      await sendLeadToSeller(bot, seller, existingLead!);
+      const msgId = await sendLeadToSeller(bot, seller, existingLead!, conv.sellerMsgId);
+      if (msgId) {
+        await upsertConversation(chatId, { sellerMsgId: msgId });
+      }
     }
 
     await bot.sendMessage(
       chatId,
-      `✅ *Заявка принята!*\n\nМенеджер свяжется с вами по номеру *${phone}* в ближайшее время.`,
+      `✅ Заявка принята! Менеджер свяжется с вами по номеру ${phone} в ближайшее время.`,
       {
-        parse_mode: "Markdown",
         reply_markup: { inline_keyboard: [[{ text: "◀️ Главное меню", callback_data: "menu_main" }]] },
       }
     );
@@ -865,7 +880,8 @@ export function startTelegramBot() {
     const { botPrompt, priceList } = await getSellerSettings(conv.sellerId);
 
     const noMarkdownNote = "\n\nВАЖНО: Пиши обычным текстом без какого-либо форматирования. Не используй звёздочки, подчёркивания, решётки и другие символы markdown. Только чистый читаемый текст.";
-    const phoneNote = "\n\nКогда клиент выбрал услугу или готов записаться/оформить заказ — обязательно попроси его номер телефона для подтверждения и связи с менеджером. Напиши что-то вроде: 'Укажите, пожалуйста, ваш номер телефона, чтобы менеджер мог с вами связаться.'";
+    const phoneNote = "\n\nПорядок работы с клиентом: 1) Сначала уточни все детали — услугу, дату и время записи. 2) Предложи дополнительные услуги если уместно. 3) Только после того как клиент подтвердил дату/время — попроси номер телефона для связи. Не проси телефон раньше времени. При указании цен всегда добавляй 'рублей' или 'руб.'";
+
     const systemPromptText = priceList
       ? `${botPrompt}\n\nПрайс-лист товаров/услуг:\n${priceList}\n\nИспользуй ТОЛЬКО эти товары/услуги из прайса при ответах на вопросы о наличии, ценах и описаниях. Если клиент спрашивает о чём-то не из прайса — сообщи, что такого нет в ассортименте.${phoneNote}${noMarkdownNote}`
       : `${botPrompt}${phoneNote}${noMarkdownNote}`;
@@ -1024,7 +1040,10 @@ export function startTelegramBot() {
         }
 
         if (seller && !conv.leadId) {
-          await sendLeadToSeller(bot, seller, existingLead!);
+          const msgId = await sendLeadToSeller(bot, seller, existingLead!, conv.sellerMsgId);
+          if (msgId) {
+            await upsertConversation(chatId, { sellerMsgId: msgId });
+          }
         }
 
         if (!conv.leadId) {
