@@ -377,6 +377,13 @@ ${conversationText}
   }
 }
 
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
 async function sendLeadToSeller(
   bot: TelegramBot,
   seller: typeof usersTable.$inferSelect,
@@ -387,14 +394,14 @@ async function sendLeadToSeller(
 
   const statusLabel = lead.status === "hot" ? "Горячий 🔥" : lead.status === "warm" ? "Тёплый" : "Холодный";
   const msg = [
-    `🆕 *Заявка из Telegram*`,
+    `🆕 <b>Заявка из Telegram</b>`,
     ``,
-    `👤 Клиент: ${lead.clientName}`,
-    `📦 Услуга: ${lead.service}`,
-    lead.quantity ? `📊 Количество: ${lead.quantity}` : null,
-    lead.deadline ? `📅 Дата/Срок: ${lead.deadline}` : null,
-    lead.price ? `💰 Цена: ${lead.price}` : null,
-    lead.details ? `📝 Детали: ${lead.details}` : null,
+    `👤 Клиент: ${escapeHtml(lead.clientName)}`,
+    `📦 Услуга: ${escapeHtml(lead.service)}`,
+    lead.quantity ? `📊 Количество: ${escapeHtml(lead.quantity)}` : null,
+    lead.deadline ? `📅 Дата/Срок: ${escapeHtml(lead.deadline)}` : null,
+    lead.price ? `💰 Цена: ${escapeHtml(lead.price)}` : null,
+    lead.details ? `📝 Детали: ${escapeHtml(lead.details)}` : null,
     ``,
     `Статус: ${statusLabel}`,
   ]
@@ -403,18 +410,25 @@ async function sendLeadToSeller(
 
   try {
     if (existingMsgId) {
-      await bot.editMessageText(msg, {
-        chat_id: seller.telegramChatId,
-        message_id: existingMsgId,
-        parse_mode: "Markdown",
-      });
-      return existingMsgId;
+      try {
+        await bot.editMessageText(msg, {
+          chat_id: seller.telegramChatId,
+          message_id: existingMsgId,
+          parse_mode: "HTML",
+        });
+        return existingMsgId;
+      } catch (editErr) {
+        // If edit fails, fall back to sending a new message
+        console.warn("[TelegramBot] Edit failed, sending new message:", (editErr as Error).message);
+        const sent = await bot.sendMessage(seller.telegramChatId, msg, { parse_mode: "HTML" });
+        return sent.message_id;
+      }
     } else {
-      const sent = await bot.sendMessage(seller.telegramChatId, msg, { parse_mode: "Markdown" });
+      const sent = await bot.sendMessage(seller.telegramChatId, msg, { parse_mode: "HTML" });
       return sent.message_id;
     }
   } catch (e) {
-    console.error("[TelegramBot] Failed to send/edit lead to seller:", e);
+    console.error("[TelegramBot] Failed to send lead to seller:", e);
     return null;
   }
 }
