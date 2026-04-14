@@ -304,7 +304,7 @@ ${conversationText}
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: [{ role: "user", parts: [{ text: extractPrompt }] }],
-      config: { maxOutputTokens: 1024 },
+      config: { maxOutputTokens: 8192 },
     });
     const text = (response.text ?? "").replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
     return JSON.parse(text);
@@ -896,7 +896,7 @@ export function startTelegramBot() {
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents,
-      config: { maxOutputTokens: 1024 },
+      config: { maxOutputTokens: 8192 },
     });
 
     const replyText = response.text ?? "Минуту, уточняю информацию...";
