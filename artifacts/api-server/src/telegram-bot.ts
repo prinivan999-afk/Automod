@@ -465,6 +465,52 @@ async function sendLeadToSeller(
   }
 }
 
+export async function markCompletedAppointments() {
+  try {
+    const booked = await db
+      .select()
+      .from(appointmentsTable)
+      .where(eq(appointmentsTable.status, "booked"));
+
+    if (booked.length === 0) return;
+
+    const now = new Date();
+
+    for (const appt of booked) {
+      // Parse appointment date + time in UTC
+      const [h, m] = appt.timeSlot.split(":").map(Number);
+      const apptStart = new Date(`${appt.date}T${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:00Z`);
+
+      // Get slot duration from schedule for that day of week
+      const dayOfWeek = apptStart.getUTCDay();
+      const [schedule] = await db
+        .select()
+        .from(workScheduleTable)
+        .where(eq(workScheduleTable.dayOfWeek, dayOfWeek));
+
+      const slotMinutes = schedule?.slotDuration ?? 60;
+      const apptEnd = new Date(apptStart.getTime() + slotMinutes * 60 * 1000);
+
+      if (now >= apptEnd) {
+        await db
+          .update(appointmentsTable)
+          .set({ status: "completed" })
+          .where(eq(appointmentsTable.id, appt.id));
+        console.log(`[Cleanup] Appointment ${appt.id} (${appt.clientName} ${appt.date} ${appt.timeSlot}) marked as completed`);
+      }
+    }
+  } catch (err) {
+    console.error("[Cleanup] Error marking completed appointments:", err);
+  }
+}
+
+export function startAppointmentCleanupJob() {
+  // Run immediately on startup, then every 5 minutes
+  markCompletedAppointments();
+  setInterval(markCompletedAppointments, 5 * 60 * 1000);
+  console.log("[Cleanup] Appointment cleanup job started (every 5 min)");
+}
+
 export function startTelegramBot() {
   if (!BOT_TOKEN) {
     console.warn("[TelegramBot] TELEGRAM_BOT_TOKEN not set, bot disabled");

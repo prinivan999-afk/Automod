@@ -120,7 +120,7 @@ export default function Raspisanie() {
   const today = new Date();
   const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
   const upcomingAppointments = appointments
-    .filter((a) => a.date >= todayStr)
+    .filter((a) => a.status === "booked" && a.date >= todayStr)
     .sort((a, b) => (a.date + a.timeSlot).localeCompare(b.date + b.timeSlot))
     .slice(0, 20);
 
