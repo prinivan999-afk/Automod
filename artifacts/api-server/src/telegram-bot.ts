@@ -950,20 +950,29 @@ export function startTelegramBot() {
 
       const dateObj = new Date(dateToBook);
       const formatted = dateObj.toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
-      const confirmText = `✅ Вы записаны на ${formatted} в ${timeSlot}!\n\nЧтобы менеджер мог с вами связаться, укажите ваш номер телефона.`;
+      const alreadyHasLead = !!conv.leadId;
+      const confirmText = alreadyHasLead
+        ? `✅ Запись обновлена: ${formatted} в ${timeSlot}!`
+        : `✅ Вы записаны на ${formatted} в ${timeSlot}!\n\nЧтобы менеджер мог с вами связаться, укажите ваш номер телефона.`;
 
       messages.push({ role: "model", parts: [{ text: confirmText }] });
       await db.update(botConversationsTable)
         .set({ messages: JSON.stringify(messages) })
         .where(eq(botConversationsTable.userChatId, chatId));
 
-      await bot.sendMessage(chatId, confirmText, {
-        reply_markup: {
-          keyboard: [[{ text: "📱 Поделиться номером телефона", request_contact: true }]],
-          one_time_keyboard: true,
-          resize_keyboard: true,
-        },
-      });
+      if (alreadyHasLead) {
+        await bot.sendMessage(chatId, confirmText, {
+          reply_markup: { inline_keyboard: [[{ text: "◀️ Главное меню", callback_data: "menu_main" }]] },
+        });
+      } else {
+        await bot.sendMessage(chatId, confirmText, {
+          reply_markup: {
+            keyboard: [[{ text: "📱 Поделиться номером телефона", request_contact: true }]],
+            one_time_keyboard: true,
+            resize_keyboard: true,
+          },
+        });
+      }
       return;
     }
 
@@ -1027,18 +1036,27 @@ export function startTelegramBot() {
         await upsertConversation(chatId, { pendingDate: null });
         const dateObj = new Date(detectedDate);
         const formatted = dateObj.toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
-        const confirmText = `✅ Вы записаны на ${formatted} в ${timeSlot}!\n\nЧтобы менеджер мог с вами связаться, укажите ваш номер телефона.`;
+        const alreadyHasLead2 = !!conv.leadId;
+        const confirmText = alreadyHasLead2
+          ? `✅ Запись обновлена: ${formatted} в ${timeSlot}!`
+          : `✅ Вы записаны на ${formatted} в ${timeSlot}!\n\nЧтобы менеджер мог с вами связаться, укажите ваш номер телефона.`;
         messages.push({ role: "model", parts: [{ text: confirmText }] });
         await db.update(botConversationsTable)
           .set({ messages: JSON.stringify(messages) })
           .where(eq(botConversationsTable.userChatId, chatId));
-        await bot.sendMessage(chatId, confirmText, {
-          reply_markup: {
-            keyboard: [[{ text: "📱 Поделиться номером телефона", request_contact: true }]],
-            one_time_keyboard: true,
-            resize_keyboard: true,
-          },
-        });
+        if (alreadyHasLead2) {
+          await bot.sendMessage(chatId, confirmText, {
+            reply_markup: { inline_keyboard: [[{ text: "◀️ Главное меню", callback_data: "menu_main" }]] },
+          });
+        } else {
+          await bot.sendMessage(chatId, confirmText, {
+            reply_markup: {
+              keyboard: [[{ text: "📱 Поделиться номером телефона", request_contact: true }]],
+              one_time_keyboard: true,
+              resize_keyboard: true,
+            },
+          });
+        }
         return;
       }
 
@@ -1084,9 +1102,9 @@ export function startTelegramBot() {
       .set({ messages: JSON.stringify(messages) })
       .where(eq(botConversationsTable.userChatId, chatId));
 
-    // If bot is asking for phone number — show "Share Contact" reply keyboard
+    // If bot is asking for phone number — show "Share Contact" reply keyboard (only if no lead yet)
     const botAsksForPhone = /номер телефона|ваш номер|поделитесь номером|укажите номер|телефон для связи|контактный номер|пришлите номер|напишите номер/i.test(replyText);
-    if (botAsksForPhone) {
+    if (botAsksForPhone && !conv.leadId) {
       await bot.sendMessage(chatId, replyText, {
         reply_markup: {
           keyboard: [[{ text: "📱 Поделиться номером телефона", request_contact: true }]],
