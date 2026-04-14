@@ -179,6 +179,50 @@ function generateTimeSlots(start: string, end: string, slotMinutes: number): str
   return slots;
 }
 
+async function getNextAvailableSlots(dateStr: string, count = 3): Promise<string[]> {
+  let dateObj: Date;
+  try {
+    dateObj = new Date(dateStr);
+    if (isNaN(dateObj.getTime())) return [];
+  } catch {
+    return [];
+  }
+
+  const dayOfWeek = dateObj.getDay();
+  const [daySchedule] = await db
+    .select()
+    .from(workScheduleTable)
+    .where(eq(workScheduleTable.dayOfWeek, dayOfWeek));
+
+  if (!daySchedule || !daySchedule.isWorking) return [];
+
+  const isoDate = dateObj.toISOString().split("T")[0];
+  const allSlots = generateTimeSlots(daySchedule.startTime, daySchedule.endTime, daySchedule.slotDuration);
+
+  const booked = await db
+    .select()
+    .from(appointmentsTable)
+    .where(and(eq(appointmentsTable.date, isoDate), eq(appointmentsTable.status, "booked")));
+
+  const bookedTimes = new Set(booked.map((b) => b.timeSlot));
+  return allSlots.filter((s) => !bookedTimes.has(s)).slice(0, count);
+}
+
+async function isSlotBooked(date: string, timeSlot: string): Promise<boolean> {
+  const existing = await db
+    .select()
+    .from(appointmentsTable)
+    .where(
+      and(
+        eq(appointmentsTable.date, date),
+        eq(appointmentsTable.timeSlot, timeSlot),
+        eq(appointmentsTable.status, "booked")
+      )
+    )
+    .limit(1);
+  return existing.length > 0;
+}
+
 async function getAvailableSlotsText(dateStr: string): Promise<string> {
   let dateObj: Date;
   try {
@@ -935,6 +979,23 @@ export function startTelegramBot() {
         }).where(eq(leadsTable.id, leadId));
       }
 
+      // Check if slot is already taken
+      const slotTaken = await isSlotBooked(dateToBook, timeSlot);
+      if (slotTaken) {
+        const freeSlots = await getNextAvailableSlots(dateToBook);
+        const dateObjRedir = new Date(dateToBook);
+        const formattedRedir = dateObjRedir.toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
+        const redirectText = freeSlots.length > 0
+          ? `К сожалению, время ${timeSlot} на ${formattedRedir} уже занято другим клиентом.\n\nВот ближайшие свободные слоты:\n${freeSlots.map((s) => `🕐 ${s}`).join("\n")}\n\nВыберите другое удобное время!`
+          : `К сожалению, время ${timeSlot} на ${formattedRedir} уже занято, и других свободных слотов на этот день нет. Пожалуйста, выберите другую дату.`;
+        messages.push({ role: "model", parts: [{ text: redirectText }] });
+        await db.update(botConversationsTable)
+          .set({ messages: JSON.stringify(messages) })
+          .where(eq(botConversationsTable.userChatId, chatId));
+        await bot.sendMessage(chatId, redirectText);
+        return;
+      }
+
       // Create appointment
       await db.insert(appointmentsTable).values({
         leadId,
@@ -1022,6 +1083,23 @@ export function startTelegramBot() {
             status: "hot",
             isPriority: true,
           }).where(eq(leadsTable.id, leadId));
+        }
+
+        // Check if slot is already taken
+        const slotTaken2 = await isSlotBooked(detectedDate, timeSlot);
+        if (slotTaken2) {
+          const freeSlots2 = await getNextAvailableSlots(detectedDate);
+          const dateObjRedir2 = new Date(detectedDate);
+          const formattedRedir2 = dateObjRedir2.toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
+          const redirectText2 = freeSlots2.length > 0
+            ? `К сожалению, время ${timeSlot} на ${formattedRedir2} уже занято другим клиентом.\n\nВот ближайшие свободные слоты:\n${freeSlots2.map((s) => `🕐 ${s}`).join("\n")}\n\nВыберите другое удобное время!`
+            : `К сожалению, время ${timeSlot} на ${formattedRedir2} уже занято, и других свободных слотов на этот день нет. Пожалуйста, выберите другую дату.`;
+          messages.push({ role: "model", parts: [{ text: redirectText2 }] });
+          await db.update(botConversationsTable)
+            .set({ messages: JSON.stringify(messages), pendingDate: null })
+            .where(eq(botConversationsTable.userChatId, chatId));
+          await bot.sendMessage(chatId, redirectText2);
+          return;
         }
 
         await db.insert(appointmentsTable).values({
@@ -1250,7 +1328,7 @@ export function startTelegramBot() {
           }
         }
 
-        if (!conv.leadId) {
+        if (!conv.leadId && !botAsksForPhone) {
           await bot.sendMessage(
             chatId,
             `Заявка зафиксирована! Чтобы менеджер мог с вами связаться, укажите ваш номер телефона.`,
@@ -1262,6 +1340,8 @@ export function startTelegramBot() {
               },
             }
           );
+          await upsertConversation(chatId, { leadId: existingLead!.id });
+        } else if (!conv.leadId) {
           await upsertConversation(chatId, { leadId: existingLead!.id });
         }
       }
