@@ -903,7 +903,8 @@ export function startTelegramBot() {
       .where(eq(botConversationsTable.userChatId, chatId));
 
     if (seller) {
-      const msgId = await sendLeadToSeller(bot, seller, existingLead!, conv.sellerMsgId);
+      // Always send a NEW message on phone confirmation so seller gets notified
+      const msgId = await sendLeadToSeller(bot, seller, existingLead!, null);
       if (msgId) {
         await upsertConversation(chatId, { sellerMsgId: msgId });
       }
@@ -1409,8 +1410,11 @@ export function startTelegramBot() {
           }
         }
 
-        if (seller && !conv.leadId) {
-          const msgId = await sendLeadToSeller(bot, seller, existingLead!, conv.sellerMsgId);
+        // Notify seller: always for new leads, and also when phone is provided for existing leads
+        const shouldNotifySeller = seller && (!conv.leadId || phonePattern);
+        if (shouldNotifySeller) {
+          // Send new message on phone confirmation; edit for intermediate updates
+          const msgId = await sendLeadToSeller(bot, seller, existingLead!, phonePattern ? null : conv.sellerMsgId);
           if (msgId) {
             await upsertConversation(chatId, { sellerMsgId: msgId });
           }
