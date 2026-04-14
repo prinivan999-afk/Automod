@@ -1303,21 +1303,38 @@ export function startTelegramBot() {
           await upsertConversation(chatId, { leadId: newLead.id });
         }
 
-        if (timePattern && effectiveLeadData.deadline) {
-          const timeMatch = text.match(/(\d{1,2}:\d{2})/);
-          if (timeMatch && existingLead) {
-            const isoDate = effectiveLeadData.deadline && effectiveLeadData.deadline.includes("-")
-              ? effectiveLeadData.deadline
-              : new Date().toISOString().split("T")[0];
+        // Try to book appointment from deadline or current message
+        if (existingLead) {
+          const deadlineText = effectiveLeadData.deadline ?? null;
+          // Extract time: first from AI-parsed deadline, then from current message
+          const deadlineTimeMatch = deadlineText?.match(/(\d{1,2}:\d{2})/);
+          const textTimeMatch = text.match(/(\d{1,2}:\d{2})/);
+          const finalTimeSlot = deadlineTimeMatch?.[1] ?? textTimeMatch?.[1] ?? null;
 
-            await db.insert(appointmentsTable).values({
-              leadId: existingLead.id,
-              date: isoDate,
-              timeSlot: timeMatch[1],
-              clientName,
-              clientChatId: chatId,
-              status: "booked",
-            });
+          if (finalTimeSlot) {
+            // Get ISO date: from conv.pendingDate, from deadline text, or from current message
+            const dateFromDeadline = deadlineText ? await parseDateFromText(deadlineText) : null;
+            const dateFromText = await parseDateFromText(text);
+            const finalDate = conv.pendingDate ?? dateFromDeadline ?? dateFromText ?? null;
+
+            if (finalDate) {
+              // Only insert if slot not already booked
+              const slotAlreadyTaken = await isSlotBooked(finalDate, finalTimeSlot);
+              if (!slotAlreadyTaken) {
+                await db.insert(appointmentsTable).values({
+                  leadId: existingLead.id,
+                  date: finalDate,
+                  timeSlot: finalTimeSlot,
+                  clientName,
+                  clientChatId: chatId,
+                  status: "booked",
+                });
+                // Update lead deadline to proper format
+                await db.update(leadsTable).set({
+                  deadline: `${finalDate} ${finalTimeSlot}`,
+                }).where(eq(leadsTable.id, existingLead.id));
+              }
+            }
           }
         }
 
