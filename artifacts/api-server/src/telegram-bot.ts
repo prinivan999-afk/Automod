@@ -865,9 +865,10 @@ export function startTelegramBot() {
     const { botPrompt, priceList } = await getSellerSettings(conv.sellerId);
 
     const noMarkdownNote = "\n\nВАЖНО: Пиши обычным текстом без какого-либо форматирования. Не используй звёздочки, подчёркивания, решётки и другие символы markdown. Только чистый читаемый текст.";
+    const phoneNote = "\n\nКогда клиент выбрал услугу или готов записаться/оформить заказ — обязательно попроси его номер телефона для подтверждения и связи с менеджером. Напиши что-то вроде: 'Укажите, пожалуйста, ваш номер телефона, чтобы менеджер мог с вами связаться.'";
     const systemPromptText = priceList
-      ? `${botPrompt}\n\nПрайс-лист товаров/услуг:\n${priceList}\n\nИспользуй ТОЛЬКО эти товары/услуги из прайса при ответах на вопросы о наличии, ценах и описаниях. Если клиент спрашивает о чём-то не из прайса — сообщи, что такого нет в ассортименте.${noMarkdownNote}`
-      : `${botPrompt}${noMarkdownNote}`;
+      ? `${botPrompt}\n\nПрайс-лист товаров/услуг:\n${priceList}\n\nИспользуй ТОЛЬКО эти товары/услуги из прайса при ответах на вопросы о наличии, ценах и описаниях. Если клиент спрашивает о чём-то не из прайса — сообщи, что такого нет в ассортименте.${phoneNote}${noMarkdownNote}`
+      : `${botPrompt}${phoneNote}${noMarkdownNote}`;
 
     const contents = [
       { role: "user" as const, parts: [{ text: systemPromptText }] },
@@ -928,7 +929,17 @@ export function startTelegramBot() {
       const phoneMatch = text.match(/(\+7|8)[\s\-]?\(?\d{3}\)?[\s\-]?\d{3}[\s\-]?\d{2}[\s\-]?\d{2}/);
       const phoneExtra = phoneMatch ? `\nТелефон: ${phoneMatch[0]}` : "";
 
-      if (leadData) {
+      // Use fallback if AI couldn't extract lead data
+      const effectiveLeadData = leadData ?? {
+        service: "Запрос из Telegram",
+        details: null,
+        quantity: null,
+        deadline: null,
+        price: null,
+        status: isReadyKeyword ? "hot" : "warm",
+      };
+
+      {
         let existingLead = conv.leadId
           ? (await db.select().from(leadsTable).where(eq(leadsTable.id, conv.leadId)).limit(1))[0]
           : null;
@@ -937,13 +948,13 @@ export function startTelegramBot() {
           const [updated] = await db
             .update(leadsTable)
             .set({
-              service: leadData.service || existingLead.service,
-              details: (leadData.details || existingLead.details || "") + phoneExtra,
-              quantity: leadData.quantity || existingLead.quantity,
-              deadline: leadData.deadline || existingLead.deadline,
-              price: leadData.price || existingLead.price,
-              status: phonePattern ? "hot" : leadData.status,
-              isPriority: phonePattern || leadData.status === "hot",
+              service: effectiveLeadData.service || existingLead.service,
+              details: (effectiveLeadData.details || existingLead.details || "") + phoneExtra,
+              quantity: effectiveLeadData.quantity || existingLead.quantity,
+              deadline: effectiveLeadData.deadline || existingLead.deadline,
+              price: effectiveLeadData.price || existingLead.price,
+              status: phonePattern ? "hot" : effectiveLeadData.status,
+              isPriority: phonePattern || effectiveLeadData.status === "hot",
             })
             .where(eq(leadsTable.id, existingLead.id))
             .returning();
@@ -955,18 +966,18 @@ export function startTelegramBot() {
               userId: seller?.id ?? null,
               clientName,
               platform: "Telegram",
-              service: leadData.service,
-              details: (leadData.details ?? "") + phoneExtra,
-              quantity: leadData.quantity,
-              deadline: leadData.deadline,
-              price: leadData.price,
-              status: phonePattern ? "hot" : leadData.status,
-              isPriority: phonePattern || leadData.status === "hot",
+              service: effectiveLeadData.service,
+              details: (effectiveLeadData.details ?? "") + phoneExtra,
+              quantity: effectiveLeadData.quantity,
+              deadline: effectiveLeadData.deadline,
+              price: effectiveLeadData.price,
+              status: phonePattern ? "hot" : effectiveLeadData.status,
+              isPriority: phonePattern || effectiveLeadData.status === "hot",
               recommendation: phonePattern
                 ? "Клиент оставил номер телефона — связаться немедленно"
-                : leadData.status === "hot"
+                : effectiveLeadData.status === "hot"
                   ? "Связаться как можно быстрее — клиент готов"
-                  : leadData.status === "warm"
+                  : effectiveLeadData.status === "warm"
                     ? "Уточнить детали и ответить на вопросы"
                     : "Предложить скидку или альтернативный вариант",
             })
@@ -994,11 +1005,11 @@ export function startTelegramBot() {
           await upsertConversation(chatId, { leadId: newLead.id });
         }
 
-        if (timePattern && leadData.deadline) {
+        if (timePattern && effectiveLeadData.deadline) {
           const timeMatch = text.match(/(\d{1,2}:\d{2})/);
           if (timeMatch && existingLead) {
-            const isoDate = leadData.deadline.includes("-")
-              ? leadData.deadline
+            const isoDate = effectiveLeadData.deadline && effectiveLeadData.deadline.includes("-")
+              ? effectiveLeadData.deadline
               : new Date().toISOString().split("T")[0];
 
             await db.insert(appointmentsTable).values({
@@ -1019,14 +1030,12 @@ export function startTelegramBot() {
         if (!conv.leadId) {
           await bot.sendMessage(
             chatId,
-            `✅ *Заявка принята!*\n\nМенеджер свяжется с вами в ближайшее время.\n\nЕсть ещё вопросы?`,
+            `Заявка зафиксирована! Чтобы менеджер мог с вами связаться, укажите ваш номер телефона.`,
             {
-              parse_mode: "Markdown",
               reply_markup: {
-                inline_keyboard: [
-                  [{ text: "✅ Подтвердить заказ", callback_data: "confirm_order" }],
-                  [{ text: "◀️ Главное меню", callback_data: "menu_main" }],
-                ],
+                keyboard: [[{ text: "📱 Поделиться номером телефона", request_contact: true }]],
+                one_time_keyboard: true,
+                resize_keyboard: true,
               },
             }
           );
