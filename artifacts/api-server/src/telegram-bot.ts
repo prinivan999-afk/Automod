@@ -179,7 +179,7 @@ function generateTimeSlots(start: string, end: string, slotMinutes: number): str
   return slots;
 }
 
-async function getNextAvailableSlots(dateStr: string, count = 3): Promise<string[]> {
+async function getNextAvailableSlots(dateStr: string, nearTime?: string, count = 2): Promise<string[]> {
   let dateObj: Date;
   try {
     dateObj = new Date(dateStr);
@@ -188,7 +188,7 @@ async function getNextAvailableSlots(dateStr: string, count = 3): Promise<string
     return [];
   }
 
-  const dayOfWeek = dateObj.getDay();
+  const dayOfWeek = dateObj.getUTCDay();
   const [daySchedule] = await db
     .select()
     .from(workScheduleTable)
@@ -205,7 +205,33 @@ async function getNextAvailableSlots(dateStr: string, count = 3): Promise<string
     .where(and(eq(appointmentsTable.date, isoDate), eq(appointmentsTable.status, "booked")));
 
   const bookedTimes = new Set(booked.map((b) => b.timeSlot));
-  return allSlots.filter((s) => !bookedTimes.has(s)).slice(0, count);
+  const freeSlots = allSlots.filter((s) => !bookedTimes.has(s));
+
+  if (!nearTime) return freeSlots.slice(0, count);
+
+  // Find the pivot index in allSlots (including booked ones)
+  const pivotIdx = allSlots.indexOf(nearTime);
+  if (pivotIdx === -1) return freeSlots.slice(0, count);
+
+  // Walk outward from pivot: one slot before, one slot after
+  const result: string[] = [];
+  // Slot immediately before pivot
+  for (let i = pivotIdx - 1; i >= 0 && result.length < count; i--) {
+    if (freeSlots.includes(allSlots[i])) { result.push(allSlots[i]); break; }
+  }
+  // Slot immediately after pivot
+  for (let i = pivotIdx + 1; i < allSlots.length && result.length < count; i++) {
+    if (freeSlots.includes(allSlots[i])) { result.push(allSlots[i]); break; }
+  }
+
+  // If only one side had a free slot, fill with next nearest from either direction
+  if (result.length < count) {
+    for (const s of freeSlots) {
+      if (!result.includes(s) && result.length < count) result.push(s);
+    }
+  }
+
+  return result.sort();
 }
 
 async function isSlotBooked(date: string, timeSlot: string): Promise<boolean> {
@@ -1002,7 +1028,7 @@ export function startTelegramBot() {
       // Check if slot is already taken
       const slotTaken = await isSlotBooked(dateToBook, timeSlot);
       if (slotTaken) {
-        const freeSlots = await getNextAvailableSlots(dateToBook);
+        const freeSlots = await getNextAvailableSlots(dateToBook, timeSlot);
         const dateObjRedir = new Date(dateToBook);
         const formattedRedir = dateObjRedir.toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
         const redirectText = freeSlots.length > 0
@@ -1108,7 +1134,7 @@ export function startTelegramBot() {
         // Check if slot is already taken
         const slotTaken2 = await isSlotBooked(detectedDate, timeSlot);
         if (slotTaken2) {
-          const freeSlots2 = await getNextAvailableSlots(detectedDate);
+          const freeSlots2 = await getNextAvailableSlots(detectedDate, timeSlot);
           const dateObjRedir2 = new Date(detectedDate);
           const formattedRedir2 = dateObjRedir2.toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
           const redirectText2 = freeSlots2.length > 0
@@ -1257,7 +1283,7 @@ export function startTelegramBot() {
           if (dlDate) {
             const slotTakenForLead = await isSlotBooked(dlDate, dlTimeMatch[1]);
             if (slotTakenForLead) {
-              const freeAlts = await getNextAvailableSlots(dlDate);
+              const freeAlts = await getNextAvailableSlots(dlDate, dlTimeMatch[1]);
               const dateObjAlt = new Date(dlDate);
               const formattedAlt = dateObjAlt.toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
               const conflictMsg = freeAlts.length > 0
