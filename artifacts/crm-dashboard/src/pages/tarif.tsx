@@ -27,6 +27,7 @@ export default function Tarif() {
   const [rawText, setRawText] = useState("");
   const [businessType, setBusinessType] = useState("");
   const [analyzedResult, setAnalyzedResult] = useState<AnalyzeTariffResponse | null>(null);
+  const [lastAnalyzedText, setLastAnalyzedText] = useState("");
 
   const analyzeMutation = useAnalyzeTariff();
   const saveMutation = useSaveTariffSettings();
@@ -44,6 +45,7 @@ export default function Tarif() {
       {
         onSuccess: (data) => {
           setAnalyzedResult(data);
+          setLastAnalyzedText(rawText);
           toast.success("Тариф успешно проанализирован");
         },
         onError: () => {
@@ -115,17 +117,19 @@ export default function Tarif() {
               />
             </div>
           </CardContent>
-          <CardFooter>
-            <Button 
-              onClick={handleAnalyze} 
-              disabled={analyzeMutation.isPending || !rawText.trim()}
-              className="w-full"
-            >
-              {analyzeMutation.isPending ? "Анализируем..." : (
-                <><Sparkles className="w-4 h-4 mr-2" /> Анализировать через AI</>
-              )}
-            </Button>
-          </CardFooter>
+          {(!analyzedResult || rawText !== lastAnalyzedText) && (
+            <CardFooter>
+              <Button 
+                onClick={handleAnalyze} 
+                disabled={analyzeMutation.isPending || !rawText.trim()}
+                className="w-full"
+              >
+                {analyzeMutation.isPending ? "Анализируем..." : (
+                  <><Sparkles className="w-4 h-4 mr-2" /> Анализировать через AI</>
+                )}
+              </Button>
+            </CardFooter>
+          )}
         </Card>
 
         <div className="space-y-6">
