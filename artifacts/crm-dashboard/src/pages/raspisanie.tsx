@@ -118,8 +118,9 @@ export default function Raspisanie() {
   };
 
   const today = new Date();
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
   const upcomingAppointments = appointments
-    .filter((a) => new Date(a.date + "T" + a.timeSlot) >= today)
+    .filter((a) => a.date >= todayStr)
     .sort((a, b) => (a.date + a.timeSlot).localeCompare(b.date + b.timeSlot))
     .slice(0, 20);
 
@@ -141,7 +142,7 @@ export default function Raspisanie() {
         </Button>
         <Button
           variant={activeTab === "appointments" ? "default" : "outline"}
-          onClick={() => setActiveTab("appointments")}
+          onClick={() => { setActiveTab("appointments"); loadAppointments(); }}
           className="flex items-center gap-2"
         >
           <Users className="w-4 h-4" />
