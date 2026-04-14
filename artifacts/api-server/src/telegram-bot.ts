@@ -381,6 +381,10 @@ export function startTelegramBot() {
     return null;
   }
 
+  // Clear any existing webhook to avoid 409 conflicts on restart
+  fetch(`https://api.telegram.org/bot${BOT_TOKEN}/deleteWebhook?drop_pending_updates=false`)
+    .catch(() => {});
+
   const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 
   bot.onText(/\/start(?:\s+(\S+))?/, async (msg, match) => {

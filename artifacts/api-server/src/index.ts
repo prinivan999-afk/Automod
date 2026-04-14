@@ -23,5 +23,16 @@ app.listen(port, (err) => {
   }
 
   logger.info({ port }, "Server listening");
-  startTelegramBot();
+  const bot = startTelegramBot();
+
+  const shutdown = () => {
+    if (bot) {
+      bot.stopPolling().finally(() => process.exit(0));
+    } else {
+      process.exit(0);
+    }
+  };
+
+  process.on("SIGTERM", shutdown);
+  process.on("SIGINT", shutdown);
 });
