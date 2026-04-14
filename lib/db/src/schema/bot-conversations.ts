@@ -11,6 +11,7 @@ export const botConversationsTable = pgTable("bot_conversations", {
   status: text("status").notNull().default("waiting_seller"),
   leadId: integer("lead_id"),
   sellerMsgId: integer("seller_msg_id"),
+  pendingDate: text("pending_date"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

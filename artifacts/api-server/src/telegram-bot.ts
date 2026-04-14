@@ -220,6 +220,22 @@ async function getAvailableSlotsText(dateStr: string): Promise<string> {
 }
 
 async function parseDateFromText(text: string): Promise<string | null> {
+  const lower = text.toLowerCase();
+
+  // Relative dates
+  const today = new Date();
+  if (/\bсегодня\b/.test(lower)) return today.toISOString().split("T")[0];
+  if (/\bзавтра\b/.test(lower)) {
+    const d = new Date(today);
+    d.setDate(d.getDate() + 1);
+    return d.toISOString().split("T")[0];
+  }
+  if (/\bпослезавтра\b/.test(lower)) {
+    const d = new Date(today);
+    d.setDate(d.getDate() + 2);
+    return d.toISOString().split("T")[0];
+  }
+
   const patterns = [
     /(\d{1,2})[./](\d{1,2})[./](\d{4})/,
     /(\d{1,2})[./](\d{1,2})/,
@@ -867,6 +883,85 @@ export function startTelegramBot() {
     const messages: BotMessage[] = JSON.parse(conv.messages || "[]");
     messages.push({ role: "user", parts: [{ text }] });
 
+    // If user sends a time (HH:MM) and there's a pending date — create appointment directly
+    const timeOnlyMatch = text.match(/^(\d{1,2}:\d{2})$/);
+    if (timeOnlyMatch && conv.pendingDate) {
+      const timeSlot = timeOnlyMatch[1];
+      const dateToBook = conv.pendingDate;
+
+      const clientName = msg.from?.username
+        ? `@${msg.from.username}`
+        : msg.from?.first_name ?? "Клиент из Telegram";
+
+      const { botPrompt: _bp, priceList } = await getSellerSettings(conv.sellerId);
+      const [seller] = conv.sellerId
+        ? await db.select().from(usersTable).where(eq(usersTable.id, conv.sellerId)).limit(1)
+        : [undefined];
+
+      // Upsert lead
+      let leadId = conv.leadId;
+      if (!leadId) {
+        const leadData = await extractLeadFromConversation(messages, clientName, priceList);
+        const [newLead] = await db.insert(leadsTable).values({
+          userId: seller?.id ?? null,
+          clientName,
+          platform: "Telegram",
+          service: leadData?.service ?? "Запись через бота",
+          details: leadData?.details ?? null,
+          quantity: leadData?.quantity ?? null,
+          deadline: `${dateToBook} ${timeSlot}`,
+          price: leadData?.price ?? null,
+          status: "hot",
+          isPriority: true,
+          recommendation: "Клиент выбрал время записи — связаться для подтверждения",
+        }).returning();
+        leadId = newLead.id;
+        await upsertConversation(chatId, { leadId: newLead.id });
+
+        if (seller) {
+          const msgId = await sendLeadToSeller(bot, seller, newLead, conv.sellerMsgId);
+          if (msgId) await upsertConversation(chatId, { sellerMsgId: msgId });
+        }
+      } else {
+        await db.update(leadsTable).set({
+          deadline: `${dateToBook} ${timeSlot}`,
+          status: "hot",
+          isPriority: true,
+        }).where(eq(leadsTable.id, leadId));
+      }
+
+      // Create appointment
+      await db.insert(appointmentsTable).values({
+        leadId,
+        date: dateToBook,
+        timeSlot,
+        clientName,
+        clientChatId: chatId,
+        status: "booked",
+      });
+
+      // Clear pending date
+      await upsertConversation(chatId, { pendingDate: null });
+
+      const dateObj = new Date(dateToBook);
+      const formatted = dateObj.toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
+      const confirmText = `✅ Вы записаны на ${formatted} в ${timeSlot}!\n\nЧтобы менеджер мог с вами связаться, укажите ваш номер телефона.`;
+
+      messages.push({ role: "model", parts: [{ text: confirmText }] });
+      await db.update(botConversationsTable)
+        .set({ messages: JSON.stringify(messages) })
+        .where(eq(botConversationsTable.userChatId, chatId));
+
+      await bot.sendMessage(chatId, confirmText, {
+        reply_markup: {
+          keyboard: [[{ text: "📱 Поделиться номером телефона", request_contact: true }]],
+          one_time_keyboard: true,
+          resize_keyboard: true,
+        },
+      });
+      return;
+    }
+
     const detectedDate = await parseDateFromText(text);
     if (detectedDate) {
       const slotsText = await getAvailableSlotsText(detectedDate);
@@ -874,7 +969,7 @@ export function startTelegramBot() {
       messages.push({ role: "model", parts: [{ text: slotsText }] });
       await db
         .update(botConversationsTable)
-        .set({ messages: JSON.stringify(messages) })
+        .set({ messages: JSON.stringify(messages), pendingDate: detectedDate })
         .where(eq(botConversationsTable.userChatId, chatId));
 
       await bot.sendMessage(chatId, slotsText);
