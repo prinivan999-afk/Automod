@@ -47,6 +47,9 @@ export default function Profil() {
     { query: { enabled: !!profile?.apiToken, refetchInterval: 60_000 } }
   );
 
+  const [tokenMismatch, setTokenMismatch] = useState(false);
+  const [loggedInRecoveryToken, setLoggedInRecoveryToken] = useState("");
+
   const handleRefreshStatus = async () => {
     if (!profile?.apiToken) return;
     setIsRefreshing(true);
@@ -60,17 +63,44 @@ export default function Profil() {
         };
         setProfile(updated);
         localStorage.setItem("crm_profile", JSON.stringify(updated));
+        setTokenMismatch(false);
         await refetchLicense();
         if (updated.telegramUsernameVerified) {
           toast.success("Username верифицирован!");
         } else {
           toast.info("Верификация ещё не выполнена. Отправьте /token боту.");
         }
+      } else {
+        setTokenMismatch(true);
+        toast.error("Токен устарел. Восстановите доступ через /mytoken в боте.");
       }
     } catch {
-      toast.error("Не удалось обновить статус");
+      setTokenMismatch(true);
+      toast.error("Токен устарел или недействителен. Восстановите доступ.");
     } finally {
       setIsRefreshing(false);
+    }
+  };
+
+  const handleLoggedInRecovery = async () => {
+    const token = loggedInRecoveryToken.trim();
+    if (!token) { toast.error("Введите токен"); return; }
+    try {
+      const res = await fetch(`/api/users/profile?apiToken=${encodeURIComponent(token)}`);
+      if (!res.ok) { toast.error("Токен не найден. Проверьте правильность токена."); return; }
+      const data = await res.json();
+      const recovered: Profile = {
+        telegramUsername: data.telegramUsername,
+        apiToken: data.apiToken,
+        telegramUsernameVerified: data.telegramUsernameVerified ?? false,
+      };
+      setProfile(recovered);
+      localStorage.setItem("crm_profile", JSON.stringify(recovered));
+      setTokenMismatch(false);
+      setLoggedInRecoveryToken("");
+      toast.success("Доступ восстановлен!");
+    } catch {
+      toast.error("Ошибка при восстановлении");
     }
   };
 
@@ -401,12 +431,42 @@ export default function Profil() {
                 )}
               </div>
 
-              <button
-                className="text-xs text-muted-foreground hover:text-foreground underline"
-                onClick={() => { localStorage.removeItem("crm_profile"); setProfile(null); }}
-              >
-                Выйти из аккаунта
-              </button>
+              {tokenMismatch && (
+                <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-4 space-y-3 mt-2">
+                  <div>
+                    <p className="text-sm font-semibold text-red-400 mb-1">⚠️ Токен устарел</p>
+                    <p className="text-xs text-muted-foreground">
+                      Отправьте боту <code className="bg-muted px-1 rounded">/mytoken</code> из Telegram и вставьте полученный токен:
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Вставьте токен из /mytoken"
+                      value={loggedInRecoveryToken}
+                      onChange={(e) => setLoggedInRecoveryToken(e.target.value)}
+                      className="font-mono text-xs"
+                    />
+                    <Button size="sm" onClick={handleLoggedInRecovery}>Восстановить</Button>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center gap-4">
+                <button
+                  className="text-xs text-muted-foreground hover:text-foreground underline"
+                  onClick={() => { localStorage.removeItem("crm_profile"); setProfile(null); }}
+                >
+                  Выйти из аккаунта
+                </button>
+                {!tokenMismatch && (
+                  <button
+                    className="text-xs text-muted-foreground hover:text-foreground underline"
+                    onClick={() => setTokenMismatch(true)}
+                  >
+                    Сменить токен
+                  </button>
+                )}
+              </div>
             </div>
           )}
         </CardContent>
