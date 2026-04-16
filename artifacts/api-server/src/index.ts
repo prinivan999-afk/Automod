@@ -17,6 +17,8 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
+const isDev = process.env.NODE_ENV === "development";
+
 app.listen(port, (err) => {
   if (err) {
     logger.error({ err }, "Error listening on port");
@@ -39,11 +41,17 @@ app.listen(port, (err) => {
   process.on("SIGTERM", shutdown);
   process.on("SIGINT", shutdown);
 
-  startTelegramBot()
-    .then((bot) => {
-      botInstance = bot;
-    })
-    .catch((err) => {
-      logger.error({ err }, "Failed to start Telegram bot");
-    });
+  if (isDev) {
+    logger.info(
+      "Development mode: Telegram bot disabled to prevent polling conflict with production server"
+    );
+  } else {
+    startTelegramBot()
+      .then((bot) => {
+        botInstance = bot;
+      })
+      .catch((err) => {
+        logger.error({ err }, "Failed to start Telegram bot");
+      });
+  }
 });
