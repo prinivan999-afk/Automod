@@ -28,3 +28,4 @@ export * from "./work-schedule";
 export * from "./appointments";
 export * from "./bot-conversations";
 export * from "./license-keys";
+export * from "./telegram-processed-updates";

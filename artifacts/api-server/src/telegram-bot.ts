@@ -9,7 +9,9 @@ import {
   workScheduleTable,
   appointmentsTable,
   botConversationsTable,
+  telegramProcessedUpdatesTable,
 } from "@workspace/db";
+import { sql } from "drizzle-orm";
 import { ai } from "@workspace/integrations-gemini-ai";
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
@@ -527,23 +529,37 @@ export async function startTelegramBot() {
 
   const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 
-  // Deduplicate updates to prevent processing the same message twice
-  // (can happen when multiple instances briefly overlap during restart)
-  const seenUpdateIds = new Set<number>();
+  // Database-based deduplication — atomic across ALL server instances (dev + prod).
+  // Uses PostgreSQL primary key conflict: only the first INSERT succeeds.
   const originalProcessUpdate = (bot as any).processUpdate.bind(bot);
   (bot as any).processUpdate = (update: any) => {
-    if (seenUpdateIds.has(update.update_id)) {
-      console.log(`[TelegramBot] Skipping duplicate update ${update.update_id}`);
-      return;
-    }
-    seenUpdateIds.add(update.update_id);
-    // Keep the set bounded to avoid memory leaks (keep last 500 IDs)
-    if (seenUpdateIds.size > 500) {
-      const first = seenUpdateIds.values().next().value;
-      seenUpdateIds.delete(first!);
-    }
-    originalProcessUpdate(update);
+    (async () => {
+      try {
+        const rows = await db
+          .insert(telegramProcessedUpdatesTable)
+          .values({ updateId: update.update_id })
+          .onConflictDoNothing()
+          .returning();
+        if (rows.length === 0) {
+          console.log(`[TelegramBot] Skipping duplicate update ${update.update_id}`);
+          return;
+        }
+        originalProcessUpdate(update);
+      } catch (err) {
+        console.error("[TelegramBot] Dedup DB error, processing anyway:", err);
+        originalProcessUpdate(update);
+      }
+    })();
   };
+
+  // Clean up old processed update IDs every hour (keep only last 24h)
+  setInterval(async () => {
+    try {
+      await db.execute(
+        sql`DELETE FROM telegram_processed_updates WHERE processed_at < NOW() - INTERVAL '24 hours'`
+      );
+    } catch {}
+  }, 60 * 60 * 1000);
 
   bot.onText(/\/start(?:\s+(\S+))?/, async (msg, match) => {
     const chatId = String(msg.chat.id);
