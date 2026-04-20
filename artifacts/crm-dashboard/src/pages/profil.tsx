@@ -49,6 +49,8 @@ export default function Profil() {
 
   const [tokenMismatch, setTokenMismatch] = useState(false);
   const [loggedInRecoveryToken, setLoggedInRecoveryToken] = useState("");
+  const [recoveryError, setRecoveryError] = useState("");
+  const [isRecovering, setIsRecovering] = useState(false);
 
   const handleRefreshStatus = async () => {
     if (!profile?.apiToken) return;
@@ -84,7 +86,9 @@ export default function Profil() {
 
   const handleLoggedInRecovery = async () => {
     const token = loggedInRecoveryToken.trim();
-    if (!token) { toast.error("Введите токен"); return; }
+    if (!token) { setRecoveryError("Введите токен из бота"); return; }
+    setIsRecovering(true);
+    setRecoveryError("");
     try {
       const res = await fetch(`/api/users/profile?apiToken=${encodeURIComponent(token)}`);
       if (!res.ok) {
@@ -94,11 +98,12 @@ export default function Profil() {
           if (currentRes.ok) {
             setTokenMismatch(false);
             setLoggedInRecoveryToken("");
-            toast.info("Ваш текущий токен работает — восстановление не нужно.");
+            setRecoveryError("");
+            toast.info("Ваш текущий токен работает.");
             return;
           }
         }
-        toast.error("Токен не найден. Отправьте /mytoken боту AutoMind и вставьте токен из ответа.");
+        setRecoveryError("Токен не найден. Отправьте /mytoken боту и скопируйте токен из ответа.");
         return;
       }
       const data = await res.json();
@@ -111,9 +116,12 @@ export default function Profil() {
       localStorage.setItem("crm_profile", JSON.stringify(recovered));
       setTokenMismatch(false);
       setLoggedInRecoveryToken("");
+      setRecoveryError("");
       toast.success("Доступ восстановлен!");
     } catch {
-      toast.error("Ошибка при восстановлении");
+      setRecoveryError("Ошибка подключения. Попробуйте ещё раз.");
+    } finally {
+      setIsRecovering(false);
     }
   };
 
@@ -481,12 +489,12 @@ export default function Profil() {
                     <div>
                       <p className="text-sm font-semibold text-red-400 mb-1">⚠️ Токен устарел</p>
                       <p className="text-xs text-muted-foreground">
-                        Отправьте боту <code className="bg-muted px-1 rounded">/mytoken</code> из Telegram и вставьте полученный токен:
+                        Отправьте <code className="bg-muted px-1 rounded">/mytoken</code> или <code className="bg-muted px-1 rounded">/register</code> боту в Telegram и вставьте полученный токен:
                       </p>
                     </div>
                     <button
                       className="text-xs text-muted-foreground hover:text-foreground underline shrink-0"
-                      onClick={() => { setTokenMismatch(false); setLoggedInRecoveryToken(""); }}
+                      onClick={() => { setTokenMismatch(false); setLoggedInRecoveryToken(""); setRecoveryError(""); }}
                     >
                       Закрыть
                     </button>
@@ -495,11 +503,16 @@ export default function Profil() {
                     <Input
                       placeholder="Вставьте токен из /mytoken"
                       value={loggedInRecoveryToken}
-                      onChange={(e) => setLoggedInRecoveryToken(e.target.value)}
+                      onChange={(e) => { setLoggedInRecoveryToken(e.target.value); setRecoveryError(""); }}
                       className="font-mono text-xs"
                     />
-                    <Button size="sm" onClick={handleLoggedInRecovery}>Восстановить</Button>
+                    <Button size="sm" onClick={handleLoggedInRecovery} disabled={isRecovering}>
+                      {isRecovering ? "Проверяем..." : "Восстановить"}
+                    </Button>
                   </div>
+                  {recoveryError && (
+                    <p className="text-xs text-red-400">{recoveryError}</p>
+                  )}
                 </div>
               )}
 
