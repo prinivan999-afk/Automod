@@ -6,6 +6,7 @@ import botRouter from "./bot";
 import usersRouter from "./users";
 import scheduleRouter from "./schedule";
 import licenseRouter from "./license";
+import geminiRouter from "./gemini";
 
 const router: IRouter = Router();
 
@@ -16,5 +17,6 @@ router.use(botRouter);
 router.use(usersRouter);
 router.use(scheduleRouter);
 router.use(licenseRouter);
+router.use(geminiRouter);
 
 export default router;
