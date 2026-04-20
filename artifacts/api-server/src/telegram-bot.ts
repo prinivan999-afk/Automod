@@ -1,5 +1,6 @@
 import TelegramBot from "node-telegram-bot-api";
 import { eq, and } from "drizzle-orm";
+import { randomBytes } from "crypto";
 import {
   db,
   usersTable,
@@ -604,7 +605,33 @@ export async function startTelegramBot() {
       return;
     }
 
-    // No deep link — ask for seller username manually
+    // No deep link — check if this is a seller (they have their own account)
+    const senderUsername = msg.from?.username?.toLowerCase();
+    if (senderUsername) {
+      const [sellerAccount] = await db
+        .select()
+        .from(usersTable)
+        .where(eq(usersTable.telegramUsername, senderUsername))
+        .limit(1);
+
+      if (sellerAccount) {
+        // This person is a registered seller — show seller panel
+        const status = sellerAccount.telegramUsernameVerified ? "✅ Верифицирован" : "⚠️ Не верифицирован";
+        await bot.sendMessage(
+          chatId,
+          `👋 С возвращением, *@${senderUsername}*!\n\n` +
+          `Статус аккаунта: ${status}\n\n` +
+          `Доступные команды:\n` +
+          `• /mytoken — ваш токен для входа на сайт\n` +
+          `• /schedule — ваш график работы\n\n` +
+          `Для входа в личный кабинет — откройте сайт AutoMind.`,
+          { parse_mode: "Markdown" }
+        );
+        return;
+      }
+    }
+
+    // Not a seller — ask for seller username manually
     await upsertConversation(chatId, {
       status: "waiting_seller",
       sellerId: null,
@@ -717,6 +744,73 @@ export async function startTelegramBot() {
     );
   });
 
+  // Register directly via bot — creates account in production DB
+  bot.onText(/\/register/, async (msg) => {
+    const chatId = String(msg.chat.id);
+    const realUsername = msg.from?.username?.toLowerCase();
+    const realTelegramUserId = String(msg.from?.id ?? "");
+
+    if (!realUsername) {
+      await bot.sendMessage(
+        chatId,
+        `❌ Не удалось получить ваш Telegram username.\n\nУстановите username в настройках Telegram (Настройки → Изменить профиль → Имя пользователя) и попробуйте снова.`
+      );
+      return;
+    }
+
+    // Check if already registered
+    const [existing] = await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.telegramUsername, realUsername))
+      .limit(1);
+
+    if (existing) {
+      // Already registered — just confirm and show token
+      if (!existing.telegramUsernameVerified) {
+        // Update telegramChatId and mark as verified
+        await db.update(usersTable).set({
+          telegramChatId: chatId,
+          telegramUserId: realTelegramUserId,
+          telegramUsernameVerified: true,
+        }).where(eq(usersTable.id, existing.id));
+      }
+      await bot.sendMessage(
+        chatId,
+        `✅ Аккаунт *@${realUsername}* уже зарегистрирован и верифицирован!\n\n` +
+        `🔑 Ваш токен для входа на сайт:\n\n\`${existing.apiToken}\`\n\n` +
+        `Войдите в личный кабинет через «Уже есть аккаунт? Войти по токену» и вставьте этот токен.`,
+        { parse_mode: "Markdown" }
+      );
+      return;
+    }
+
+    // Create new account
+    const apiToken = randomBytes(32).toString("hex");
+    const [newUser] = await db
+      .insert(usersTable)
+      .values({
+        telegramUsername: realUsername,
+        apiToken,
+        telegramChatId: chatId,
+        telegramUserId: realTelegramUserId,
+        telegramUsernameVerified: true,
+      })
+      .returning();
+
+    await bot.sendMessage(
+      chatId,
+      `🎉 Аккаунт *@${realUsername}* создан и верифицирован!\n\n` +
+      `🔑 Ваш токен для входа на сайт:\n\n\`${newUser.apiToken}\`\n\n` +
+      `Войдите в личный кабинет:\n` +
+      `1. Откройте сайт\n` +
+      `2. Нажмите «Уже есть аккаунт? Войти по токену»\n` +
+      `3. Вставьте токен выше\n\n` +
+      `📩 Новые заявки будут приходить сюда.`,
+      { parse_mode: "Markdown" }
+    );
+  });
+
   // Recovery command: send /mytoken from your Telegram account to get your API token back
   bot.onText(/\/mytoken/, async (msg) => {
     const chatId = String(msg.chat.id);
@@ -739,7 +833,7 @@ export async function startTelegramBot() {
     if (!user) {
       await bot.sendMessage(
         chatId,
-        `❌ Аккаунт *@${realUsername}* не найден. Зарегистрируйтесь в личном кабинете.`,
+        `❌ Аккаунт *@${realUsername}* не найден.\n\nДля регистрации отправьте команду /register — аккаунт создастся автоматически!`,
         { parse_mode: "Markdown" }
       );
       return;
