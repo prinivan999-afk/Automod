@@ -23,14 +23,32 @@ const isDev = process.env.NODE_ENV === "development";
 
 // Run schema migrations that may be needed in production
 async function runMigrations() {
+  const migrations = [
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_code TEXT`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_user_id TEXT`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_started_at TIMESTAMPTZ`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_expires_at TIMESTAMPTZ`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()`,
+  ];
+
+  for (const migration of migrations) {
+    try {
+      await db.execute(sql.raw(migration));
+    } catch (err) {
+      logger.warn({ err, migration }, "Migration warning (non-fatal)");
+    }
+  }
+
   try {
     await db.execute(sql`
-      ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_code TEXT
+      ALTER TABLE users ADD CONSTRAINT users_telegram_user_id_unique UNIQUE (telegram_user_id)
     `);
-    logger.info("DB migrations applied");
-  } catch (err) {
-    logger.warn({ err }, "Migration warning (non-fatal)");
+  } catch {
+    // constraint may already exist
   }
+
+  logger.info("DB migrations applied");
 }
 
 runMigrations();
