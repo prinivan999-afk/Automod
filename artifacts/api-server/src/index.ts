@@ -2,6 +2,8 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import { startTelegramBot, startAppointmentCleanupJob } from "./telegram-bot";
 import TelegramBot from "node-telegram-bot-api";
+import { db } from "@workspace/db";
+import { sql } from "drizzle-orm";
 
 const rawPort = process.env["PORT"];
 
@@ -18,6 +20,20 @@ if (Number.isNaN(port) || port <= 0) {
 }
 
 const isDev = process.env.NODE_ENV === "development";
+
+// Run schema migrations that may be needed in production
+async function runMigrations() {
+  try {
+    await db.execute(sql`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_code TEXT
+    `);
+    logger.info("DB migrations applied");
+  } catch (err) {
+    logger.warn({ err }, "Migration warning (non-fatal)");
+  }
+}
+
+runMigrations();
 
 app.listen(port, (err) => {
   if (err) {

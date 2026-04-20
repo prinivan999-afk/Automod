@@ -531,6 +531,25 @@ export async function startTelegramBot() {
 
   const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 
+  // Catch polling errors (e.g. 409 Conflict, network errors)
+  bot.on("polling_error", (err) => {
+    console.error("[TelegramBot] Polling error:", (err as any).code ?? err.message);
+  });
+
+  // Helper: wrap async handler so errors are caught and logged, not silently dropped
+  const safeHandler = (
+    fn: (msg: any, match?: any) => Promise<void>
+  ) => async (msg: any, match?: any) => {
+    try {
+      await fn(msg, match);
+    } catch (err: any) {
+      console.error("[TelegramBot] Handler error:", err?.message ?? err);
+      try {
+        await bot.sendMessage(String(msg.chat.id), "⚠️ Что-то пошло не так. Попробуйте ещё раз.");
+      } catch {}
+    }
+  };
+
   // Cache bot username for deep links
   try {
     const me = await bot.getMe();
@@ -574,7 +593,7 @@ export async function startTelegramBot() {
     } catch {}
   }, 60 * 60 * 1000);
 
-  bot.onText(/\/start(?:\s+(\S+))?/, async (msg, match) => {
+  bot.onText(/\/start(?:\s+(\S+))?/, safeHandler(async (msg, match) => {
     const chatId = String(msg.chat.id);
     const deepLinkParam = match?.[1]?.trim();
 
@@ -716,9 +735,9 @@ export async function startTelegramBot() {
       `${DEFAULT_GREETING}\n\nЧтобы начать, укажите *@username* продавца.\nНапример: *@misha_flowers*`,
       { parse_mode: "Markdown" }
     );
-  });
+  }));
 
-  bot.onText(/\/token (.+)/, async (msg, match) => {
+  bot.onText(/\/token (.+)/, safeHandler(async (msg, match) => {
     const chatId = String(msg.chat.id);
     const token = match?.[1]?.trim();
     if (!token) return;
@@ -813,10 +832,10 @@ export async function startTelegramBot() {
         `📩 Новые заявки будут приходить в этот чат.`,
       { parse_mode: "Markdown" }
     );
-  });
+  }));
 
   // Register directly via bot — creates account in production DB
-  bot.onText(/\/register/, async (msg) => {
+  bot.onText(/\/register/, safeHandler(async (msg) => {
     const chatId = String(msg.chat.id);
     const realUsername = msg.from?.username?.toLowerCase();
     const realTelegramUserId = String(msg.from?.id ?? "");
@@ -880,10 +899,10 @@ export async function startTelegramBot() {
       `📩 Новые заявки будут приходить сюда.`,
       { parse_mode: "Markdown" }
     );
-  });
+  }));
 
   // Recovery command: send /mytoken from your Telegram account to get your API token back
-  bot.onText(/\/mytoken/, async (msg) => {
+  bot.onText(/\/mytoken/, safeHandler(async (msg) => {
     const chatId = String(msg.chat.id);
     const realUsername = msg.from?.username?.toLowerCase();
 
@@ -934,9 +953,9 @@ export async function startTelegramBot() {
       `⚠️ Не передавайте токен третьим лицам.`,
       { parse_mode: "Markdown" }
     );
-  });
+  }));
 
-  bot.onText(/\/zapisi/, async (msg) => {
+  bot.onText(/\/zapisi/, safeHandler(async (msg) => {
     const chatId = String(msg.chat.id);
     const conv = await getConversation(chatId);
 
@@ -968,7 +987,7 @@ export async function startTelegramBot() {
       `📅 *График работы:*\n\n${scheduleText}\n\nНапишите удобную вам дату — покажу свободное время!`,
       { parse_mode: "Markdown" }
     );
-  });
+  }));
 
   bot.on("callback_query", async (query) => {
     const chatId = String(query.message?.chat.id);
