@@ -48,4 +48,3 @@ channel = "stable-25_05"
 ADMIN_SECRET = "automind-admin-secret-2024"
 
 [userenv.development]
-BOT_ENABLED = "true"

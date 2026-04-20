@@ -848,7 +848,7 @@ export async function startTelegramBot() {
           parse_mode: "Markdown",
           reply_markup: {
             inline_keyboard: [[
-              { text: "✅ Подтвердить аккаунт одной кнопкой", callback_data: `verify:${user.apiToken}` }
+              { text: "✅ Подтвердить аккаунт одной кнопкой", callback_data: `verify:${user.id}` }
             ]]
           }
         }
@@ -914,8 +914,8 @@ export async function startTelegramBot() {
 
     // ── Verify account via button ──
     if (data.startsWith("verify:")) {
-      const token = data.slice("verify:".length);
-      const [user] = await db.select().from(usersTable).where(eq(usersTable.apiToken, token)).limit(1);
+      const userId = parseInt(data.slice("verify:".length), 10);
+      const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId)).limit(1);
       if (!user) {
         await bot.sendMessage(chatId, "❌ Токен не найден. Попробуйте зарегистрироваться заново на сайте.");
         return;
