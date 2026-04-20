@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import Layout from "@/components/layout";
-import { useEffect, lazy, Suspense } from "react";
+import { useEffect, useState, lazy, Suspense, createContext, useContext } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 
 const NotFound = lazy(() => import("@/pages/not-found"));
@@ -29,6 +29,15 @@ const queryClient = new QueryClient({
   },
 });
 
+export const ThemeContext = createContext<{ dark: boolean; toggle: () => void }>({
+  dark: false,
+  toggle: () => {},
+});
+
+export function useTheme() {
+  return useContext(ThemeContext);
+}
+
 function Router() {
   return (
     <Layout>
@@ -49,20 +58,35 @@ function Router() {
 }
 
 function App() {
+  const [dark, setDark] = useState(() => {
+    const saved = localStorage.getItem("theme");
+    if (saved) return saved === "dark";
+    return window.matchMedia("(prefers-color-scheme: dark)").matches;
+  });
+
   useEffect(() => {
-    // Force dark mode for this sleek CRM
-    document.documentElement.classList.add("dark");
-  }, []);
+    if (dark) {
+      document.documentElement.classList.add("dark");
+      localStorage.setItem("theme", "dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+      localStorage.setItem("theme", "light");
+    }
+  }, [dark]);
+
+  const toggle = () => setDark((v) => !v);
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-          <Router />
-        </WouterRouter>
-        <Toaster />
-      </TooltipProvider>
-    </QueryClientProvider>
+    <ThemeContext.Provider value={{ dark, toggle }}>
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+            <Router />
+          </WouterRouter>
+          <Toaster />
+        </TooltipProvider>
+      </QueryClientProvider>
+    </ThemeContext.Provider>
   );
 }
 
