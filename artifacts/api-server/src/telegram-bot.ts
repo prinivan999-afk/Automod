@@ -986,8 +986,10 @@ export async function startTelegramBot() {
   }));
 
 
-  // Admin command: /gencode — generate a 30-day license key (only for @ohakol)
-  bot.onText(/\/gencode/, safeHandler(async (msg) => {
+  // Admin command: /gencode [bus] — generate a license key (only for @ohakol)
+  // /gencode      → Basic plan, 30 days
+  // /gencode bus  → Business plan, 3 days
+  bot.onText(/\/gencode(.*)/, safeHandler(async (msg, match) => {
     const chatId = String(msg.chat.id);
     const senderUsername = msg.from?.username?.toLowerCase();
 
@@ -996,18 +998,26 @@ export async function startTelegramBot() {
       return;
     }
 
+    const arg = (match?.[1] ?? "").trim().toLowerCase();
+    const isBusiness = arg === "bus";
+
+    const plan = isBusiness ? "business" : "basic";
+    const durationDays = isBusiness ? 3 : 30;
+
     const raw = randomBytes(12).toString("hex").toUpperCase();
     const key = `AM-${raw.slice(0, 4)}-${raw.slice(4, 8)}-${raw.slice(8, 12)}-${raw.slice(12, 16)}`;
 
     await db.insert(licenseKeysTable).values({
       key,
       type: "paid",
-      durationDays: 30,
+      plan,
+      durationDays,
     });
 
+    const planLabel = isBusiness ? "Business (Telegram AutoMod)" : "Базовый";
     await bot.sendMessage(
       chatId,
-      `🔑 Новый лицензионный ключ на *30 дней*:\n\n\`${key}\`\n\nПередайте этот ключ пользователю для активации подписки.`,
+      `🔑 Новый лицензионный ключ — *${planLabel}* на *${durationDays} дня*:\n\n\`${key}\`\n\nПередайте этот ключ пользователю для активации подписки.`,
       { parse_mode: "Markdown" }
     );
   }));
