@@ -623,16 +623,10 @@ export async function startTelegramBot() {
         return;
       }
 
-      // Check if this Telegram ID is already linked to a different verified account
-      const [existingByTgId] = await db
-        .select()
-        .from(usersTable)
-        .where(eq(usersTable.telegramUserId, realTelegramUserId))
-        .limit(1);
-
-      if (existingByTgId && existingByTgId.id !== userByCode.id && existingByTgId.telegramUsernameVerified) {
+      // Check that the person clicking is the same as the registered account
+      if (realUsername !== userByCode.telegramUsername) {
         await bot.sendMessage(chatId,
-          `⛔ Ваш Telegram уже привязан к аккаунту *@${existingByTgId.telegramUsername}*.\n\nОдин Telegram — один аккаунт.`,
+          `❌ Эта ссылка предназначена для аккаунта *@${userByCode.telegramUsername}*.\n\nВы вошли как *@${realUsername}*. Перейдите по ссылке с правильного Telegram-аккаунта.`,
           { parse_mode: "Markdown" }
         );
         return;
@@ -644,7 +638,6 @@ export async function startTelegramBot() {
           telegramChatId: chatId,
           telegramUserId: realTelegramUserId,
           telegramUsernameVerified: true,
-          telegramUsername: realUsername,
           verificationCode: null,
         })
         .where(eq(usersTable.id, userByCode.id));
