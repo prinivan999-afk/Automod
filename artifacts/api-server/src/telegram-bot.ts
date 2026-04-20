@@ -632,7 +632,14 @@ export async function startTelegramBot() {
       .limit(1);
 
     if (!user) {
-      await bot.sendMessage(chatId, "❌ Токен не найден. Проверьте токен в личном кабинете.");
+      await bot.sendMessage(
+        chatId,
+        `❌ Токен не найден.\n\n` +
+        `Возможные причины:\n` +
+        `• Вы скопировали старый или неверный токен\n` +
+        `• Аккаунт был пересоздан\n\n` +
+        `Отправьте /mytoken — бот пришлёт ваш актуальный токен с готовой командой.`
+      );
       return;
     }
 
@@ -741,8 +748,16 @@ export async function startTelegramBot() {
     if (!user.telegramUsernameVerified) {
       await bot.sendMessage(
         chatId,
-        `⚠️ Аккаунт *@${realUsername}* ещё не верифицирован.\n\nОтправьте: \`/token ${user.apiToken}\``,
-        { parse_mode: "Markdown" }
+        `⚠️ Аккаунт *@${realUsername}* ещё не верифицирован.\n\n` +
+        `Нажмите кнопку ниже — аккаунт будет подтверждён автоматически:`,
+        {
+          parse_mode: "Markdown",
+          reply_markup: {
+            inline_keyboard: [[
+              { text: "✅ Подтвердить аккаунт одной кнопкой", callback_data: `verify:${user.apiToken}` }
+            ]]
+          }
+        }
       );
       return;
     }
@@ -802,6 +817,34 @@ export async function startTelegramBot() {
     }
 
     try {
+
+    // ── Verify account via button ──
+    if (data.startsWith("verify:")) {
+      const token = data.slice("verify:".length);
+      const [user] = await db.select().from(usersTable).where(eq(usersTable.apiToken, token)).limit(1);
+      if (!user) {
+        await bot.sendMessage(chatId, "❌ Токен не найден. Попробуйте зарегистрироваться заново на сайте.");
+        return;
+      }
+      const realUsername = query.from?.username?.toLowerCase();
+      const realTelegramUserId = String(query.from.id);
+      if (!realUsername) {
+        await bot.sendMessage(chatId, "❌ Не удалось получить ваш Telegram username. Установите username в настройках Telegram.");
+        return;
+      }
+      await db.update(usersTable).set({
+        telegramChatId: chatId,
+        telegramUserId: realTelegramUserId,
+        telegramUsernameVerified: true,
+        telegramUsername: realUsername,
+      }).where(eq(usersTable.id, user.id));
+      await bot.sendMessage(
+        chatId,
+        `✅ Аккаунт *@${realUsername}* успешно верифицирован!\n\n📩 Новые заявки будут приходить в этот чат.`,
+        { parse_mode: "Markdown" }
+      );
+      return;
+    }
 
     const conv = await getConversation(chatId);
 
