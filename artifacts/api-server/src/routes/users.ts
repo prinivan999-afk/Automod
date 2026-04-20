@@ -76,6 +76,34 @@ router.get("/users/profile", async (req, res): Promise<void> => {
   res.json(formatUser(user));
 });
 
+router.post("/users/regenerate-token", async (req, res): Promise<void> => {
+  const apiToken = req.body?.apiToken as string | undefined;
+  if (!apiToken) {
+    res.status(400).json({ error: "apiToken обязателен" });
+    return;
+  }
+
+  const [user] = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.apiToken, apiToken))
+    .limit(1);
+
+  if (!user) {
+    res.status(404).json({ error: "Пользователь не найден" });
+    return;
+  }
+
+  const newToken = generateToken();
+  const [updated] = await db
+    .update(usersTable)
+    .set({ apiToken: newToken })
+    .where(eq(usersTable.id, user.id))
+    .returning();
+
+  res.json(formatUser(updated));
+});
+
 function formatUser(user: typeof usersTable.$inferSelect) {
   return {
     ...user,

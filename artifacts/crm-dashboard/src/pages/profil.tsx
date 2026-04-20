@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
   MessageCircle, Copy, Check, Key, User, Send,
-  ShieldCheck, ShieldAlert, RefreshCw, Zap, Lock, Clock, Crown
+  ShieldCheck, ShieldAlert, RefreshCw, Zap, Lock, Clock, Crown, RotateCcw
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -227,6 +227,37 @@ export default function Profil() {
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
     toast.success("Скопировано!");
+  };
+
+  const [isRegenerating, setIsRegenerating] = useState(false);
+  const handleRegenerateToken = async () => {
+    if (!profile?.apiToken) return;
+    const confirmed = window.confirm(
+      "Будет создан новый токен. Старый перестанет работать — нужно будет заново подтвердить аккаунт через бота командой /token. Продолжить?"
+    );
+    if (!confirmed) return;
+    setIsRegenerating(true);
+    try {
+      const res = await fetch("/api/users/regenerate-token", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ apiToken: profile.apiToken }),
+      });
+      if (!res.ok) { toast.error("Не удалось обновить токен"); return; }
+      const data = await res.json();
+      const updated: Profile = {
+        telegramUsername: data.telegramUsername,
+        apiToken: data.apiToken,
+        telegramUsernameVerified: data.telegramUsernameVerified ?? false,
+      };
+      setProfile(updated);
+      localStorage.setItem("crm_profile", JSON.stringify(updated));
+      toast.success("Токен обновлён! Подтвердите аккаунт в боте командой /token.");
+    } catch {
+      toast.error("Ошибка сети");
+    } finally {
+      setIsRegenerating(false);
+    }
   };
 
   const isVerified = profile?.telegramUsernameVerified ?? false;
@@ -530,6 +561,26 @@ export default function Profil() {
                 <Button className="w-full mt-2" onClick={() => handleCopy(`/token ${profile.apiToken}`)} variant="outline">
                   <Copy className="w-4 h-4 mr-2" />
                   Скопировать команду для бота
+                </Button>
+              </div>
+
+              <div className="rounded-lg border border-orange-500/20 bg-orange-500/5 p-4 space-y-2">
+                <p className="text-sm font-medium text-orange-500 flex items-center gap-2">
+                  <RotateCcw className="w-4 h-4" />
+                  Сгенерировать новый токен
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Если токен скомпрометирован или вы хотите сбросить доступ — создайте новый. Старый станет недействительным, потребуется повторная верификация через бота.
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="border-orange-500/40 text-orange-500 hover:bg-orange-500/10"
+                  onClick={handleRegenerateToken}
+                  disabled={isRegenerating}
+                >
+                  <RotateCcw className={`w-4 h-4 mr-2 ${isRegenerating ? "animate-spin" : ""}`} />
+                  {isRegenerating ? "Обновляем..." : "Обновить токен"}
                 </Button>
               </div>
             </CardContent>
