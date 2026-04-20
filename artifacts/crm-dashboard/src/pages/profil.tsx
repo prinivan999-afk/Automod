@@ -569,14 +569,6 @@ export default function Profil() {
                 >
                   Выйти из аккаунта
                 </button>
-                {!tokenMismatch && (
-                  <button
-                    className="text-xs text-muted-foreground hover:text-foreground underline"
-                    onClick={() => setTokenMismatch(true)}
-                  >
-                    Сменить токен
-                  </button>
-                )}
               </div>
             </div>
           )}
