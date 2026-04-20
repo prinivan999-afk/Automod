@@ -49,3 +49,4 @@ ADMIN_SECRET = "automind-admin-secret-2024"
 TELEGRAM_BOT_USERNAME = "AutoMind5_bot"
 
 [userenv.development]
+BOT_ENABLED = "true"
