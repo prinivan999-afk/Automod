@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
   Copy, Check, User, Send,
-  ShieldCheck, ShieldAlert, RefreshCw, Zap, Lock, Clock, Crown
+  ShieldCheck, ShieldAlert, RefreshCw, Zap, Lock, Clock, Crown, Star
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -216,8 +216,9 @@ export default function Profil() {
     activateLicenseMutation.mutate(
       { data: { apiToken: profile.apiToken, licenseKey: key } },
       {
-        onSuccess: () => {
-          toast.success("Лицензия активирована!");
+        onSuccess: (data) => {
+          const planLabel = (data as any)?.plan === "business" ? "Business (1 399 ₽/мес)" : "Базовый (990 ₽/мес)";
+          toast.success(`Лицензия активирована! Тариф: ${planLabel}`);
           setLicenseKey("");
           refetchLicense();
         },
@@ -307,6 +308,7 @@ export default function Profil() {
   };
 
   const currentStatus = licenseStatus?.status ?? "none";
+  const currentPlan = (licenseStatus as any)?.plan ?? "basic";
   const statusCfg = statusConfig[currentStatus as keyof typeof statusConfig] ?? statusConfig.none;
   const StatusIcon = statusCfg.icon;
 
@@ -326,11 +328,28 @@ export default function Profil() {
               <span className={statusCfg.color}>
                 {isLicenseLoading ? "Загрузка..." : statusCfg.label}
               </span>
-              {licenseStatus?.daysLeft != null && licenseStatus.daysLeft > 0 && (
-                <Badge variant="outline" className={`ml-auto ${statusCfg.color} ${statusCfg.border}`}>
-                  {licenseStatus.daysLeft} {licenseStatus.daysLeft === 1 ? "день" : licenseStatus.daysLeft < 5 ? "дня" : "дней"}
-                </Badge>
-              )}
+              <div className="ml-auto flex items-center gap-2">
+                {(currentStatus === "active" || currentStatus === "trial") && (
+                  <Badge
+                    className={
+                      currentPlan === "business"
+                        ? "bg-purple-500/15 text-purple-400 border-purple-500/30 border gap-1"
+                        : "bg-blue-500/15 text-blue-400 border-blue-500/30 border gap-1"
+                    }
+                  >
+                    {currentPlan === "business" ? (
+                      <><Star className="w-3 h-3" /> Business</>
+                    ) : (
+                      <><Crown className="w-3 h-3" /> Базовый</>
+                    )}
+                  </Badge>
+                )}
+                {licenseStatus?.daysLeft != null && licenseStatus.daysLeft > 0 && (
+                  <Badge variant="outline" className={`${statusCfg.color} ${statusCfg.border}`}>
+                    {licenseStatus.daysLeft} {licenseStatus.daysLeft === 1 ? "день" : licenseStatus.daysLeft < 5 ? "дня" : "дней"}
+                  </Badge>
+                )}
+              </div>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -348,7 +367,7 @@ export default function Profil() {
 
             {currentStatus === "expired" && (
               <div className={`rounded-md ${statusCfg.bg} border ${statusCfg.border} p-3 text-sm ${statusCfg.color}`}>
-                Пробный период завершён. Приобретите ключ за <strong>990 ₽</strong> и введите его ниже.
+                Подписка истекла. Введите новый ключ ниже для продления.
               </div>
             )}
 
@@ -356,21 +375,39 @@ export default function Profil() {
               <p className="text-sm text-muted-foreground">
                 Пробный период до{" "}
                 <strong>{new Date(licenseStatus.expiresAt).toLocaleDateString("ru-RU", { day: "numeric", month: "long" })}</strong>.
-                После — потребуется ключ за 990 ₽.
+                Активируйте ключ ниже для полного доступа.
               </p>
             )}
 
             {currentStatus === "active" && licenseStatus?.expiresAt && (
-              <p className="text-sm text-muted-foreground">
-                Подписка активна до{" "}
-                <strong>{new Date(licenseStatus.expiresAt).toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" })}</strong>.
-              </p>
+              <div className="space-y-1">
+                <p className="text-sm text-muted-foreground">
+                  Подписка активна до{" "}
+                  <strong>{new Date(licenseStatus.expiresAt).toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" })}</strong>.
+                </p>
+                {currentPlan === "business" && (
+                  <p className="text-xs text-purple-400">
+                    Тариф Business: включён Telegram Business AutoMod + управление чатами
+                  </p>
+                )}
+                {currentPlan !== "business" && (
+                  <p className="text-xs text-muted-foreground">
+                    Хотите Business? Введите ключ Business-тарифа ниже для обновления.
+                  </p>
+                )}
+              </div>
             )}
 
-            {/* License Key Input */}
-            {(currentStatus === "expired" || currentStatus === "active" || currentStatus === "trial") && (
+            {/* License Key Input — shown for all statuses when profile exists */}
+            {(currentStatus === "none" || currentStatus === "expired" || currentStatus === "active" || currentStatus === "trial") && (
               <div className="space-y-2 pt-1">
-                <Label className="text-xs text-muted-foreground">Ввести лицензионный ключ</Label>
+                <Label className="text-xs text-muted-foreground">
+                  {currentStatus === "none"
+                    ? "Есть лицензионный ключ? Введите его:"
+                    : currentStatus === "expired"
+                    ? "Введите новый лицензионный ключ:"
+                    : "Обновить / сменить тариф:"}
+                </Label>
                 <div className="flex gap-2">
                   <Input
                     placeholder="AM-XXXX-XXXX-XXXX-XXXX"
@@ -381,11 +418,14 @@ export default function Profil() {
                   <Button
                     onClick={handleActivateLicense}
                     disabled={activateLicenseMutation.isPending || !licenseKey.trim()}
-                    variant={currentStatus === "expired" ? "default" : "outline"}
+                    variant={currentStatus === "expired" || currentStatus === "none" ? "default" : "outline"}
                   >
                     {activateLicenseMutation.isPending ? "..." : "Активировать"}
                   </Button>
                 </div>
+                <p className="text-xs text-muted-foreground">
+                  Базовый тариф — 990 ₽/мес · Business тариф — 1 399 ₽/мес
+                </p>
               </div>
             )}
           </CardContent>
