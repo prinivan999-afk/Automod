@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { eq, desc, and, sql } from "drizzle-orm";
-import { db, businessConnectionsTable, automodSettingsTable, automodMessagesTable } from "@workspace/db";
+import { db, businessConnectionsTable, automodSettingsTable, automodMessagesTable, automodChatsTable } from "@workspace/db";
 import {
   SaveAutomodSettingsBody,
   ToggleAutomodConnectionBody,
@@ -167,6 +167,53 @@ router.get("/automod/stats", async (req, res): Promise<void> => {
     totalMessagesHandled,
     todayMessages,
     isGlobalEnabled: settings.isEnabled,
+  });
+});
+
+router.get("/automod/chats", async (req, res): Promise<void> => {
+  const userId = await getUserIdFromRequest(req);
+  if (!userId) { res.status(401).json({ error: "Требуется авторизация" }); return; }
+
+  const chats = await db
+    .select()
+    .from(automodChatsTable)
+    .where(eq(automodChatsTable.userId, userId))
+    .orderBy(desc(automodChatsTable.lastSeenAt));
+
+  res.json(chats.map((c) => ({
+    ...c,
+    lastSeenAt: c.lastSeenAt.toISOString(),
+    createdAt: c.createdAt.toISOString(),
+    updatedAt: c.updatedAt.toISOString(),
+  })));
+});
+
+router.patch("/automod/chats/:id/toggle-exclude", async (req, res): Promise<void> => {
+  const userId = await getUserIdFromRequest(req);
+  if (!userId) { res.status(401).json({ error: "Требуется авторизация" }); return; }
+
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Неверный ID" }); return; }
+
+  const [existing] = await db
+    .select()
+    .from(automodChatsTable)
+    .where(and(eq(automodChatsTable.id, id), eq(automodChatsTable.userId, userId)))
+    .limit(1);
+
+  if (!existing) { res.status(404).json({ error: "Чат не найден" }); return; }
+
+  const [updated] = await db
+    .update(automodChatsTable)
+    .set({ isExcluded: !existing.isExcluded })
+    .where(eq(automodChatsTable.id, id))
+    .returning();
+
+  res.json({
+    ...updated,
+    lastSeenAt: updated.lastSeenAt.toISOString(),
+    createdAt: updated.createdAt.toISOString(),
+    updatedAt: updated.updatedAt.toISOString(),
   });
 });
 

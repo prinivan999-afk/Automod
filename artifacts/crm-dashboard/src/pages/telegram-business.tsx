@@ -21,7 +21,7 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Bot, MessageSquare, Users, Activity, Info, PlusCircle, Zap, Settings, List } from "lucide-react";
+import { Bot, MessageSquare, Users, Activity, Info, PlusCircle, Zap, Settings, List, MessagesSquare, Ban, CheckCircle2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -33,11 +33,26 @@ import {
 const TABS = [
   { id: "overview", label: "Обзор", icon: Activity },
   { id: "connections", label: "Аккаунты", icon: Users },
+  { id: "chats", label: "Чаты", icon: MessagesSquare },
   { id: "settings", label: "Настройки", icon: Settings },
   { id: "activity", label: "Активность", icon: List },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
+
+type AutomodChat = {
+  id: number;
+  userId: number | null;
+  businessConnectionId: string;
+  chatId: string;
+  chatTitle: string | null;
+  chatUsername: string | null;
+  chatType: string | null;
+  isExcluded: boolean;
+  lastSeenAt: string;
+  createdAt: string;
+  updatedAt: string;
+};
 
 const getHeaders = (): Record<string, string> => {
   const token = localStorage.getItem("automod_api_token");
@@ -107,6 +122,129 @@ function useActivity() {
     queryKey: ["automod-activity"],
     queryFn: () => customFetch<AutomodMessage[]>("/api/automod/activity", { headers: getHeaders() }),
   });
+}
+
+function useChats() {
+  return useQuery({
+    queryKey: ["automod-chats"],
+    queryFn: () => customFetch<AutomodChat[]>("/api/automod/chats", { headers: getHeaders() }),
+  });
+}
+
+function useToggleChatExclude() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) =>
+      customFetch<AutomodChat>(`/api/automod/chats/${id}/toggle-exclude`, {
+        method: "PATCH",
+        headers: getHeaders(),
+      }),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(["automod-chats"], (old: AutomodChat[] | undefined) =>
+        old ? old.map((c) => (c.id === updated.id ? updated : c)) : old
+      );
+    },
+  });
+}
+
+function ChatsTab() {
+  const { data: chats, isLoading } = useChats();
+  const toggleExclude = useToggleChatExclude();
+  const { toast } = useToast();
+
+  const handleToggle = (chat: AutomodChat) => {
+    toggleExclude.mutate(chat.id, {
+      onSuccess: (updated) => {
+        toast({
+          title: updated.isExcluded ? "Чат заблокирован" : "Чат разблокирован",
+          description: updated.isExcluded
+            ? `Бот больше не будет отвечать в «${updated.chatTitle || updated.chatId}»`
+            : `Бот снова будет отвечать в «${updated.chatTitle || updated.chatId}»`,
+        });
+      },
+      onError: () => toast({ title: "Ошибка", description: "Не удалось обновить статус чата", variant: "destructive" }),
+    });
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-sm text-muted-foreground">
+            Здесь отображаются все чаты, в которых бот получал сообщения. Отключите чаты, в которых бот не должен отвечать.
+          </p>
+        </div>
+      </div>
+
+      {isLoading ? (
+        <div className="space-y-3">
+          {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-16 rounded-xl" />)}
+        </div>
+      ) : chats && chats.length > 0 ? (
+        <div className="space-y-3">
+          {chats.map((chat) => (
+            <div
+              key={chat.id}
+              className={`bg-card border rounded-xl p-4 flex items-center justify-between gap-4 transition-colors ${
+                chat.isExcluded ? "opacity-60 border-destructive/30" : ""
+              }`}
+            >
+              <div className="flex items-center gap-3 flex-1 min-w-0">
+                <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 text-sm font-bold ${
+                  chat.isExcluded
+                    ? "bg-destructive/10 text-destructive"
+                    : "bg-primary/10 text-primary"
+                }`}>
+                  {(chat.chatTitle || chat.chatUsername || chat.chatId)[0]?.toUpperCase() || "?"}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-medium truncate">
+                      {chat.chatTitle || chat.chatUsername || `Chat ${chat.chatId}`}
+                    </span>
+                    {chat.isExcluded && (
+                      <Badge variant="destructive" className="text-[10px] shrink-0">Заблокирован</Badge>
+                    )}
+                  </div>
+                  {chat.chatUsername && (
+                    <p className="text-xs text-muted-foreground">@{chat.chatUsername}</p>
+                  )}
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Тип: {chat.chatType || "личный"} · Последнее сообщение:{" "}
+                    {new Date(chat.lastSeenAt).toLocaleString("ru-RU", {
+                      day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
+                    })}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 shrink-0">
+                {chat.isExcluded ? (
+                  <Ban className="w-4 h-4 text-destructive" />
+                ) : (
+                  <CheckCircle2 className="w-4 h-4 text-green-500" />
+                )}
+                <Switch
+                  checked={!chat.isExcluded}
+                  onCheckedChange={() => handleToggle(chat)}
+                  disabled={toggleExclude.isPending}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="text-center py-14 border border-dashed rounded-xl bg-card space-y-3">
+          <MessagesSquare className="w-8 h-8 text-muted-foreground mx-auto" />
+          <div>
+            <p className="font-medium">Чатов пока нет</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              Чаты появятся автоматически, когда бот получит первые сообщения через Business-аккаунт
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function OverviewTab() {
@@ -461,6 +599,7 @@ export default function TelegramBusinessPage() {
   const ActiveComponent = {
     overview: OverviewTab,
     connections: ConnectionsTab,
+    chats: ChatsTab,
     settings: SettingsTab,
     activity: ActivityTab,
   }[activeTab];

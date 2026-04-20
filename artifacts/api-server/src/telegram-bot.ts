@@ -15,6 +15,7 @@ import {
   businessConnectionsTable,
   automodSettingsTable,
   automodMessagesTable,
+  automodChatsTable,
 } from "@workspace/db";
 import { sql } from "drizzle-orm";
 import { ai } from "@workspace/integrations-gemini-ai";
@@ -672,6 +673,42 @@ export async function startTelegramBot() {
       .limit(1);
 
     if (!conn || !conn.isEnabled) return;
+
+    // Upsert chat info (scan)
+    const chatTitle = msg.chat.title ?? msg.chat.first_name ?? msg.chat.username ?? null;
+    const chatUsername = msg.chat.username ?? null;
+    const chatType = msg.chat.type ?? null;
+    if (conn.userId) {
+      const [existingChat] = await db
+        .select()
+        .from(automodChatsTable)
+        .where(and(
+          eq(automodChatsTable.businessConnectionId, connId),
+          eq(automodChatsTable.chatId, chatId)
+        ))
+        .limit(1);
+
+      if (existingChat) {
+        await db
+          .update(automodChatsTable)
+          .set({ chatTitle, chatUsername, chatType, lastSeenAt: new Date() })
+          .where(eq(automodChatsTable.id, existingChat.id));
+
+        // If chat is excluded, skip responding
+        if (existingChat.isExcluded) return;
+      } else {
+        await db.insert(automodChatsTable).values({
+          userId: conn.userId,
+          businessConnectionId: connId,
+          chatId,
+          chatTitle,
+          chatUsername,
+          chatType,
+          isExcluded: false,
+          lastSeenAt: new Date(),
+        });
+      }
+    }
 
     // Get AutoMod settings for the user
     let settings = null;
