@@ -712,7 +712,6 @@ export async function startTelegramBot() {
           `👋 С возвращением, *@${senderUsername}*!\n\n` +
           `Статус аккаунта: ${status}\n\n` +
           `Доступные команды:\n` +
-          `• /mytoken — ваш токен для входа на сайт\n` +
           `• /schedule — ваш график работы\n\n` +
           `Для входа в личный кабинет — откройте сайт AutoMind.`,
           { parse_mode: "Markdown" }
@@ -737,102 +736,6 @@ export async function startTelegramBot() {
     );
   }));
 
-  bot.onText(/\/token (.+)/, safeHandler(async (msg, match) => {
-    const chatId = String(msg.chat.id);
-    const token = match?.[1]?.trim();
-    if (!token) return;
-
-    const [user] = await db
-      .select()
-      .from(usersTable)
-      .where(eq(usersTable.apiToken, token))
-      .limit(1);
-
-    if (!user) {
-      await bot.sendMessage(
-        chatId,
-        `❌ Токен не найден.\n\n` +
-        `Возможные причины:\n` +
-        `• Вы скопировали старый или неверный токен\n` +
-        `• Аккаунт был пересоздан\n\n` +
-        `Отправьте /mytoken — бот пришлёт ваш актуальный токен с готовой командой.`
-      );
-      return;
-    }
-
-    const realUsername = msg.from?.username?.toLowerCase();
-    const realTelegramUserId = String(msg.from!.id);
-
-    if (!realUsername) {
-      await bot.sendMessage(
-        chatId,
-        `❌ Не удалось получить ваш Telegram username.\n\nУстановите username в настройках Telegram (Настройки → Изменить профиль → Имя пользователя) и попробуйте снова.`
-      );
-      return;
-    }
-
-    // Check if this Telegram user ID is already linked to a DIFFERENT verified account.
-    // This prevents trial abuse by changing username and re-registering.
-    const [existingByTgId] = await db
-      .select()
-      .from(usersTable)
-      .where(eq(usersTable.telegramUserId, realTelegramUserId))
-      .limit(1);
-
-    if (existingByTgId && existingByTgId.id !== user.id && existingByTgId.telegramUsernameVerified) {
-      await bot.sendMessage(
-        chatId,
-        `⛔ Ваш Telegram-аккаунт уже привязан к другому профилю *@${existingByTgId.telegramUsername}*.\n\n` +
-        `Один Telegram-аккаунт — один профиль AutoMind. Смена username не даёт новый пробный период.\n\n` +
-        `Используйте тот же профиль или обратитесь в поддержку.`,
-        { parse_mode: "Markdown" }
-      );
-      return;
-    }
-
-    const updateData: Partial<typeof usersTable.$inferInsert> = {
-      telegramChatId: chatId,
-      telegramUserId: realTelegramUserId,
-      telegramUsernameVerified: true,
-    };
-
-    if (user.telegramUsername !== realUsername) {
-      const [conflicting] = await db
-        .select()
-        .from(usersTable)
-        .where(and(eq(usersTable.telegramUsername, realUsername)))
-        .limit(1);
-
-      if (conflicting && conflicting.id !== user.id) {
-        await bot.sendMessage(
-          chatId,
-          `⚠️ Username *@${realUsername}* уже зарегистрирован другим аккаунтом.\n\nЕсли это ваш username — обратитесь в поддержку.`,
-          { parse_mode: "Markdown" }
-        );
-        return;
-      }
-
-      updateData.telegramUsername = realUsername;
-    }
-
-    await db
-      .update(usersTable)
-      .set(updateData)
-      .where(eq(usersTable.id, user.id));
-
-    const finalUsername = updateData.telegramUsername ?? user.telegramUsername;
-
-    const usernameChanged = updateData.telegramUsername && updateData.telegramUsername !== user.telegramUsername;
-
-    await bot.sendMessage(
-      chatId,
-      `✅ Аккаунт *@${finalUsername}* успешно верифицирован!\n\n` +
-        (usernameChanged ? `ℹ️ Username обновлён с *@${user.telegramUsername}* на *@${finalUsername}*\n\n` : "") +
-        `🔐 Ваш Telegram подтверждён — теперь покупатели могут найти вас, написав боту *@${finalUsername}*\n` +
-        `📩 Новые заявки будут приходить в этот чат.`,
-      { parse_mode: "Markdown" }
-    );
-  }));
 
   // Register directly via bot — creates account in production DB
   bot.onText(/\/register/, safeHandler(async (msg) => {
@@ -901,59 +804,6 @@ export async function startTelegramBot() {
     );
   }));
 
-  // Recovery command: send /mytoken from your Telegram account to get your API token back
-  bot.onText(/\/mytoken/, safeHandler(async (msg) => {
-    const chatId = String(msg.chat.id);
-    const realUsername = msg.from?.username?.toLowerCase();
-
-    if (!realUsername) {
-      await bot.sendMessage(
-        chatId,
-        `❌ Не удалось получить ваш Telegram username. Установите username в настройках Telegram и попробуйте снова.`
-      );
-      return;
-    }
-
-    const [user] = await db
-      .select()
-      .from(usersTable)
-      .where(eq(usersTable.telegramUsername, realUsername))
-      .limit(1);
-
-    if (!user) {
-      await bot.sendMessage(
-        chatId,
-        `❌ Аккаунт *@${realUsername}* не найден.\n\nДля регистрации отправьте команду /register — аккаунт создастся автоматически!`,
-        { parse_mode: "Markdown" }
-      );
-      return;
-    }
-
-    if (!user.telegramUsernameVerified) {
-      await bot.sendMessage(
-        chatId,
-        `⚠️ Аккаунт *@${realUsername}* ещё не верифицирован.\n\n` +
-        `Нажмите кнопку ниже — аккаунт будет подтверждён автоматически:`,
-        {
-          parse_mode: "Markdown",
-          reply_markup: {
-            inline_keyboard: [[
-              { text: "✅ Подтвердить аккаунт одной кнопкой", callback_data: `verify:${user.id}` }
-            ]]
-          }
-        }
-      );
-      return;
-    }
-
-    await bot.sendMessage(
-      chatId,
-      `🔑 Ваш API-токен:\n\n\`${user.apiToken}\`\n\n` +
-      `Вставьте его в профиль на сайте → раздел "Профиль" → поле API-токен.\n\n` +
-      `⚠️ Не передавайте токен третьим лицам.`,
-      { parse_mode: "Markdown" }
-    );
-  }));
 
   bot.onText(/\/zapisi/, safeHandler(async (msg) => {
     const chatId = String(msg.chat.id);
