@@ -1002,7 +1002,7 @@ export async function startTelegramBot() {
     const isBusiness = arg === "bus";
 
     const plan = isBusiness ? "business" : "basic";
-    const durationDays = isBusiness ? 3 : 30;
+    const durationDays = 30;
 
     const raw = randomBytes(12).toString("hex").toUpperCase();
     const key = `AM-${raw.slice(0, 4)}-${raw.slice(4, 8)}-${raw.slice(8, 12)}-${raw.slice(12, 16)}`;
@@ -1017,7 +1017,7 @@ export async function startTelegramBot() {
     const planLabel = isBusiness ? "Business (Telegram AutoMod)" : "Базовый";
     await bot.sendMessage(
       chatId,
-      `🔑 Новый лицензионный ключ — *${planLabel}* на *${durationDays} дня*:\n\n\`${key}\`\n\nПередайте этот ключ пользователю для активации подписки.`,
+      `🔑 Новый лицензионный ключ — *${planLabel}* на *${durationDays} дней*:\n\n\`${key}\`\n\nПередайте этот ключ пользователю для активации подписки.`,
       { parse_mode: "Markdown" }
     );
   }));
