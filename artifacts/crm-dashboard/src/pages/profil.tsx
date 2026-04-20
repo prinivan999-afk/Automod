@@ -337,8 +337,7 @@ export default function Profil() {
             {(currentStatus === "none") && (
               <div className="space-y-3">
                 <p className="text-sm text-muted-foreground">
-                  Начните с бесплатного пробного периода на <strong>3 дня</strong>, затем приобретите ключ за <strong>1 099 ₽</strong> на&nbsp;
-                  <a href="https://funpay.com" target="_blank" rel="noopener noreferrer" className="text-primary underline">funpay.com</a>.
+                  Начните с бесплатного пробного периода на <strong>3 дня</strong>, затем приобретите ключ за <strong>990 ₽</strong>.
                 </p>
                 <Button onClick={handleStartTrial} disabled={isStartingTrial} className="w-full">
                   <Zap className="w-4 h-4 mr-2" />
@@ -349,8 +348,7 @@ export default function Profil() {
 
             {currentStatus === "expired" && (
               <div className={`rounded-md ${statusCfg.bg} border ${statusCfg.border} p-3 text-sm ${statusCfg.color}`}>
-                Пробный период завершён. Приобретите ключ за <strong>1 099 ₽</strong> на{" "}
-                <a href="https://funpay.com" target="_blank" rel="noopener noreferrer" className="underline">funpay.com</a> и введите его ниже.
+                Пробный период завершён. Приобретите ключ за <strong>990 ₽</strong> и введите его ниже.
               </div>
             )}
 
@@ -358,7 +356,7 @@ export default function Profil() {
               <p className="text-sm text-muted-foreground">
                 Пробный период до{" "}
                 <strong>{new Date(licenseStatus.expiresAt).toLocaleDateString("ru-RU", { day: "numeric", month: "long" })}</strong>.
-                После — потребуется ключ за 1 099 ₽.
+                После — потребуется ключ за 990 ₽.
               </p>
             )}
 

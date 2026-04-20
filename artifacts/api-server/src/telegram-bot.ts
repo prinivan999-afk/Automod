@@ -11,6 +11,7 @@ import {
   appointmentsTable,
   botConversationsTable,
   telegramProcessedUpdatesTable,
+  licenseKeysTable,
 } from "@workspace/db";
 import { sql } from "drizzle-orm";
 import { ai } from "@workspace/integrations-gemini-ai";
@@ -797,6 +798,32 @@ export async function startTelegramBot() {
     );
   }));
 
+
+  // Admin command: /gencode — generate a 30-day license key (only for @ohakol)
+  bot.onText(/\/gencode/, safeHandler(async (msg) => {
+    const chatId = String(msg.chat.id);
+    const senderUsername = msg.from?.username?.toLowerCase();
+
+    if (senderUsername !== "ohakol") {
+      await bot.sendMessage(chatId, "⛔ Эта команда доступна только администратору.");
+      return;
+    }
+
+    const raw = randomBytes(12).toString("hex").toUpperCase();
+    const key = `AM-${raw.slice(0, 4)}-${raw.slice(4, 8)}-${raw.slice(8, 12)}-${raw.slice(12, 16)}`;
+
+    await db.insert(licenseKeysTable).values({
+      key,
+      type: "paid",
+      durationDays: 30,
+    });
+
+    await bot.sendMessage(
+      chatId,
+      `🔑 Новый лицензионный ключ на *30 дней*:\n\n\`${key}\`\n\nПередайте этот ключ пользователю для активации подписки.`,
+      { parse_mode: "Markdown" }
+    );
+  }));
 
   bot.onText(/\/zapisi/, safeHandler(async (msg) => {
     const chatId = String(msg.chat.id);

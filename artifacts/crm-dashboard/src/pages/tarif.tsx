@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAnalyzeTariff, useSaveTariffSettings, useGetTariffSettings, getGetTariffSettingsQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
@@ -7,9 +7,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Sparkles, Save, Check, Loader2 } from "lucide-react";
+import { Sparkles, Save, Check, Loader2, Lock } from "lucide-react";
 import { toast } from "sonner";
 import { AnalyzeTariffResponse } from "@workspace/api-client-react/src/generated/api.schemas";
+import { useLocation } from "wouter";
 
 function countTariffItems(value: string) {
   try {
@@ -23,11 +24,31 @@ function countTariffItems(value: string) {
 export default function Tarif() {
   const queryClient = useQueryClient();
   const { data: currentSettings } = useGetTariffSettings({ query: { staleTime: 0 } });
+  const [, setLocation] = useLocation();
   
   const [rawText, setRawText] = useState("");
   const [businessType, setBusinessType] = useState("");
   const [analyzedResult, setAnalyzedResult] = useState<AnalyzeTariffResponse | null>(null);
   const [lastAnalyzedText, setLastAnalyzedText] = useState("");
+  const [licenseStatus, setLicenseStatus] = useState<"loading" | "active" | "trial" | "expired" | "none" | "no-account">("loading");
+
+  useEffect(() => {
+    const raw = localStorage.getItem("crm_profile");
+    if (!raw) {
+      setLicenseStatus("no-account");
+      return;
+    }
+    try {
+      const profile = JSON.parse(raw);
+      if (!profile?.apiToken) { setLicenseStatus("no-account"); return; }
+      fetch(`/api/license/status?apiToken=${encodeURIComponent(profile.apiToken)}`)
+        .then(r => r.json())
+        .then(data => setLicenseStatus(data.status ?? "none"))
+        .catch(() => setLicenseStatus("none"));
+    } catch {
+      setLicenseStatus("no-account");
+    }
+  }, []);
 
   const analyzeMutation = useAnalyzeTariff();
   const saveMutation = useSaveTariffSettings();
@@ -82,6 +103,35 @@ export default function Tarif() {
       }
     );
   };
+
+  if (licenseStatus === "loading") {
+    return (
+      <div className="flex items-center justify-center h-64 text-muted-foreground">
+        <Loader2 className="w-6 h-6 animate-spin mr-2" /> Проверка подписки...
+      </div>
+    );
+  }
+
+  if (licenseStatus === "no-account" || licenseStatus === "none" || licenseStatus === "expired") {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 gap-4 text-center">
+        <div className="rounded-full bg-muted p-4">
+          <Lock className="w-8 h-8 text-muted-foreground" />
+        </div>
+        <div>
+          <h2 className="text-xl font-semibold mb-1">Доступ закрыт</h2>
+          <p className="text-sm text-muted-foreground max-w-sm">
+            {licenseStatus === "no-account"
+              ? "Войдите в аккаунт, чтобы пользоваться тарифом."
+              : "Для настройки прайса необходима активная подписка. Активируйте пробный период или введите лицензионный ключ."}
+          </p>
+        </div>
+        <Button onClick={() => setLocation("/profil")}>
+          {licenseStatus === "no-account" ? "Войти" : "Активировать подписку"}
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
