@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
-import { useEffect } from "react";
+import { useLocation } from "wouter";
 import {
   customFetch,
   setAuthTokenGetter,
@@ -21,7 +21,7 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Bot, MessageSquare, Users, Activity, Info, PlusCircle, Zap, Settings, List, MessagesSquare, Ban, CheckCircle2 } from "lucide-react";
+import { Bot, MessageSquare, Users, Activity, Info, PlusCircle, Zap, Settings, List, MessagesSquare, Ban, CheckCircle2, Lock, Star } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -557,39 +557,96 @@ function ActivityTab() {
 
 export default function TelegramBusinessPage() {
   const [activeTab, setActiveTab] = useState<TabId>("overview");
-  const [token, setToken] = useState<string | null>(localStorage.getItem("automod_api_token"));
-  const [tokenInput, setTokenInput] = useState("");
+  const [licenseStatus, setLicenseStatus] = useState<"loading" | "active" | "trial" | "expired" | "none" | "no-account">("loading");
+  const [plan, setPlan] = useState<"basic" | "business">("basic");
+  const [, setLocation] = useLocation();
 
-  if (!token) {
+  useEffect(() => {
+    const raw = localStorage.getItem("crm_profile");
+    if (!raw) { setLicenseStatus("no-account"); return; }
+    try {
+      const profile = JSON.parse(raw);
+      if (!profile?.apiToken) { setLicenseStatus("no-account"); return; }
+      // Sync token for API calls
+      localStorage.setItem("automod_api_token", profile.apiToken);
+      fetch(`/api/license/status?apiToken=${encodeURIComponent(profile.apiToken)}`)
+        .then(r => r.json())
+        .then(data => {
+          setLicenseStatus(data.status ?? "none");
+          setPlan(data.plan ?? "basic");
+        })
+        .catch(() => setLicenseStatus("none"));
+    } catch {
+      setLicenseStatus("no-account");
+    }
+  }, []);
+
+  if (licenseStatus === "loading") {
     return (
-      <div className="max-w-sm mx-auto py-16 space-y-6">
-        <div className="space-y-2">
-          <h1 className="text-2xl font-bold">Telegram Business</h1>
-          <p className="text-muted-foreground text-sm">Введите API-токен для управления AutoMod</p>
+      <div className="space-y-4 pt-6">
+        <Skeleton className="h-8 w-48" />
+        <div className="grid grid-cols-4 gap-2">
+          {[1,2,3,4].map(i => <Skeleton key={i} className="h-10 rounded-lg" />)}
         </div>
-        <div className="space-y-3">
-          <Input
-            type="password"
-            placeholder="API-токен"
-            value={tokenInput}
-            onChange={(e) => setTokenInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && tokenInput.trim()) {
-                localStorage.setItem("automod_api_token", tokenInput.trim());
-                setToken(tokenInput.trim());
-              }
-            }}
-          />
-          <Button
-            className="w-full"
-            onClick={() => {
-              if (tokenInput.trim()) {
-                localStorage.setItem("automod_api_token", tokenInput.trim());
-                setToken(tokenInput.trim());
-              }
-            }}
-          >
-            Подключить
+        <Skeleton className="h-64 rounded-xl" />
+      </div>
+    );
+  }
+
+  if (licenseStatus === "no-account") {
+    return (
+      <div className="max-w-sm mx-auto py-16 text-center space-y-4">
+        <Lock className="w-10 h-10 text-muted-foreground mx-auto" />
+        <h2 className="text-xl font-bold">Требуется аккаунт</h2>
+        <p className="text-muted-foreground text-sm">Войдите в профиль, чтобы получить доступ к Telegram Business</p>
+        <Button onClick={() => setLocation("/profile")} className="w-full rounded-xl">Перейти в профиль</Button>
+      </div>
+    );
+  }
+
+  const hasAccess = plan === "business" && (licenseStatus === "active" || licenseStatus === "trial");
+
+  if (!hasAccess) {
+    return (
+      <div className="max-w-md mx-auto py-12 space-y-8">
+        <div className="text-center space-y-3">
+          <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto">
+            <Lock className="w-7 h-7 text-primary" />
+          </div>
+          <h1 className="text-2xl font-bold">Telegram Business</h1>
+          <p className="text-muted-foreground text-sm">
+            {licenseStatus === "expired" || licenseStatus === "none"
+              ? "Ваша подписка истекла или отсутствует. Активируйте тариф Business для доступа."
+              : "Эта функция доступна только на тарифе Business."}
+          </p>
+        </div>
+
+        <div className="bg-card border-2 border-primary rounded-2xl p-6 space-y-5">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
+              <Star className="w-5 h-5 text-primary" />
+            </div>
+            <div>
+              <p className="font-bold">Тариф Business</p>
+              <p className="text-sm text-muted-foreground">1 399 ₽ / месяц</p>
+            </div>
+          </div>
+          <ul className="space-y-2 text-sm">
+            {[
+              "Всё из тарифа Базовый",
+              "ИИ-автоответы в Telegram Business",
+              "Управление и блокировка чатов",
+              "Статистика по сообщениям",
+              "1 Business-аккаунт включён",
+            ].map((f) => (
+              <li key={f} className="flex items-center gap-2.5">
+                <CheckCircle2 className="w-4 h-4 text-primary shrink-0" />
+                <span>{f}</span>
+              </li>
+            ))}
+          </ul>
+          <Button className="w-full rounded-xl font-semibold" size="lg" onClick={() => setLocation("/profile")}>
+            Активировать Business
           </Button>
         </div>
       </div>
@@ -611,27 +668,20 @@ export default function TelegramBusinessPage() {
           <h1 className="text-2xl font-bold">Telegram Business</h1>
           <p className="text-muted-foreground text-sm mt-1">Управление AutoMod — ИИ автоответами на сообщения</p>
         </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="text-xs text-muted-foreground"
-          onClick={() => {
-            localStorage.removeItem("automod_api_token");
-            setToken(null);
-          }}
-        >
-          Выйти
-        </Button>
+        <Badge variant="default" className="shrink-0 gap-1.5 mt-1">
+          <Star className="w-3 h-3" />
+          Business
+        </Badge>
       </div>
 
-      <div className="flex gap-1 border-b">
+      <div className="flex gap-1 border-b overflow-x-auto">
         {TABS.map((tab) => {
           const Icon = tab.icon;
           return (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                 activeTab === tab.id
                   ? "border-primary text-primary"
                   : "border-transparent text-muted-foreground hover:text-foreground"

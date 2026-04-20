@@ -10,6 +10,7 @@ export const usersTable = pgTable("users", {
   telegramUserId: text("telegram_user_id").unique(),
   telegramUsernameVerified: boolean("telegram_username_verified").notNull().default(false),
   verificationCode: text("verification_code"),
+  plan: text("plan", { enum: ["basic", "business"] }).notNull().default("basic"),
   trialStartedAt: timestamp("trial_started_at", { withTimezone: true }),
   subscriptionExpiresAt: timestamp("subscription_expires_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

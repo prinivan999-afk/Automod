@@ -1,6 +1,6 @@
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Send, ExternalLink, X, Plug2, FileText, MessageSquare, BellRing, Check } from "lucide-react";
+import { Send, ExternalLink, X, Plug2, FileText, MessageSquare, BellRing, Check, Bot, Star } from "lucide-react";
 import { useState } from "react";
 
 const BOT_USERNAME = "AutoMind5_bot";
@@ -22,6 +22,37 @@ const features = [
   "Аналитика по лидам в одном месте",
 ];
 
+const plans = [
+  {
+    name: "Базовый",
+    price: "990",
+    desc: "Всё необходимое для старта",
+    icon: null,
+    highlight: false,
+    features: [
+      "AI-бот в Telegram",
+      "Приём заявок 24/7",
+      "Аналитика по лидам",
+      "Расписание и запись",
+      "AI разбор прайс-листа",
+    ],
+  },
+  {
+    name: "Business",
+    price: "1 399",
+    desc: "Для бизнеса с активными клиентами",
+    icon: Star,
+    highlight: true,
+    features: [
+      "Всё из Базового",
+      "Telegram Business AutoMod",
+      "ИИ-автоответы в Business-чатах",
+      "Управление чатами бота",
+      "1 Business-аккаунт включён",
+    ],
+  },
+];
+
 export default function Home() {
   const [showGuide, setShowGuide] = useState(false);
 
@@ -38,7 +69,7 @@ export default function Home() {
           ИИ отвечает клиентам<br />вместо вас
         </h1>
         <p className="text-lg text-muted-foreground max-w-xl mx-auto">
-          Принимает заявки в Telegram и превращает диалоги в заказы — пока вы занимаетесь делом.
+          Принимает заявки в Telegram, автоматически отвечает в Business-чатах и превращает диалоги в заказы — пока вы занимаетесь делом.
         </p>
         <div className="flex flex-wrap gap-3 justify-center pt-2">
           <Button size="lg" className="gap-2 font-semibold rounded-xl px-6" onClick={() => setShowGuide((v) => !v)}>
@@ -160,29 +191,54 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── ТАРИФ ── */}
+      {/* ── ТАРИФЫ ── */}
       <section className="space-y-8">
         <div className="text-center space-y-2">
-          <h2 className="text-2xl font-bold tracking-tight">Тариф</h2>
-          <p className="text-muted-foreground">Один план — всё что нужно для старта</p>
+          <h2 className="text-2xl font-bold tracking-tight">Тарифы</h2>
+          <p className="text-muted-foreground">Выберите план под ваши задачи</p>
         </div>
-        <div className="max-w-xs mx-auto bg-card border-2 border-primary rounded-2xl p-8 saas-card text-center space-y-6">
-          <div>
-            <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-1">Базовый</p>
-            <p className="text-4xl font-extrabold text-foreground">990 ₽</p>
-            <p className="text-sm text-muted-foreground mt-1">в месяц</p>
-          </div>
-          <ul className="space-y-2.5 text-sm text-left">
-            {["AI-бот в Telegram", "Приём заявок 24/7", "Аналитика по лидам", "Расписание и запись"].map((f) => (
-              <li key={f} className="flex items-center gap-2.5">
-                <Check className="w-4 h-4 text-primary shrink-0" />
-                <span>{f}</span>
-              </li>
-            ))}
-          </ul>
-          <Button className="w-full rounded-xl font-semibold" size="lg" onClick={() => setShowGuide(true)}>
-            Подключить
-          </Button>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl mx-auto">
+          {plans.map((plan) => (
+            <div
+              key={plan.name}
+              className={`relative bg-card rounded-2xl p-8 saas-card text-center space-y-6 ${
+                plan.highlight
+                  ? "border-2 border-primary shadow-lg shadow-primary/10"
+                  : "border border-border"
+              }`}
+            >
+              {plan.highlight && (
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                  <span className="bg-primary text-primary-foreground text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1">
+                    <Star className="w-3 h-3" />
+                    Рекомендуем
+                  </span>
+                </div>
+              )}
+              <div>
+                <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-1">{plan.name}</p>
+                <p className="text-4xl font-extrabold text-foreground">{plan.price} ₽</p>
+                <p className="text-sm text-muted-foreground mt-1">в месяц</p>
+                <p className="text-xs text-muted-foreground mt-2">{plan.desc}</p>
+              </div>
+              <ul className="space-y-2.5 text-sm text-left">
+                {plan.features.map((f) => (
+                  <li key={f} className="flex items-center gap-2.5">
+                    <Check className={`w-4 h-4 shrink-0 ${plan.highlight ? "text-primary" : "text-primary"}`} />
+                    <span>{f}</span>
+                  </li>
+                ))}
+              </ul>
+              <Button
+                className="w-full rounded-xl font-semibold"
+                size="lg"
+                variant={plan.highlight ? "default" : "outline"}
+                onClick={() => setShowGuide(true)}
+              >
+                Подключить
+              </Button>
+            </div>
+          ))}
         </div>
       </section>
 

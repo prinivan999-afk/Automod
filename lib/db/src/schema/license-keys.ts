@@ -7,6 +7,7 @@ export const licenseKeysTable = pgTable("license_keys", {
   id: serial("id").primaryKey(),
   key: text("key").notNull().unique(),
   type: text("type", { enum: ["trial", "paid"] }).notNull().default("paid"),
+  plan: text("plan", { enum: ["basic", "business"] }).notNull().default("basic"),
   durationDays: integer("duration_days").notNull().default(30),
   isUsed: boolean("is_used").notNull().default(false),
   usedByUserId: integer("used_by_user_id").references(() => usersTable.id),

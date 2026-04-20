@@ -10,11 +10,13 @@ const ADMIN_SECRET = process.env.ADMIN_SECRET ?? "automind-admin-2024";
 
 function calcLicenseStatus(user: typeof usersTable.$inferSelect): {
   status: "trial" | "active" | "expired" | "none";
+  plan: "basic" | "business";
   daysLeft: number | null;
   expiresAt: string | null;
   trialStartedAt: string | null;
 } {
   const now = new Date();
+  const plan = (user.plan ?? "basic") as "basic" | "business";
 
   if (user.subscriptionExpiresAt && user.subscriptionExpiresAt > now) {
     const msLeft = user.subscriptionExpiresAt.getTime() - now.getTime();
@@ -25,6 +27,7 @@ function calcLicenseStatus(user: typeof usersTable.$inferSelect): {
       const isPaidActive = user.subscriptionExpiresAt > trialEnd;
       return {
         status: isPaidActive ? "active" : "trial",
+        plan,
         daysLeft,
         expiresAt: user.subscriptionExpiresAt.toISOString(),
         trialStartedAt: user.trialStartedAt.toISOString(),
@@ -33,6 +36,7 @@ function calcLicenseStatus(user: typeof usersTable.$inferSelect): {
 
     return {
       status: "active",
+      plan,
       daysLeft,
       expiresAt: user.subscriptionExpiresAt.toISOString(),
       trialStartedAt: null,
@@ -42,13 +46,14 @@ function calcLicenseStatus(user: typeof usersTable.$inferSelect): {
   if (user.trialStartedAt) {
     return {
       status: "expired",
+      plan,
       daysLeft: 0,
       expiresAt: user.subscriptionExpiresAt?.toISOString() ?? null,
       trialStartedAt: user.trialStartedAt.toISOString(),
     };
   }
 
-  return { status: "none", daysLeft: null, expiresAt: null, trialStartedAt: null };
+  return { status: "none", plan, daysLeft: null, expiresAt: null, trialStartedAt: null };
 }
 
 router.get("/license/status", async (req, res): Promise<void> => {
@@ -118,6 +123,7 @@ router.post("/license/activate", async (req, res): Promise<void> => {
 
   const updateData: Partial<typeof usersTable.$inferInsert> = {
     subscriptionExpiresAt: newExpiry,
+    plan: (license.plan ?? "basic") as "basic" | "business",
   };
 
   if (!user.trialStartedAt && license.type === "trial") {
@@ -126,12 +132,10 @@ router.post("/license/activate", async (req, res): Promise<void> => {
 
   await db.update(usersTable).set(updateData).where(eq(usersTable.id, user.id));
 
-  if (!license.isUsed) {
-    await db
-      .update(licenseKeysTable)
-      .set({ isUsed: true, usedByUserId: user.id, activatedAt: now })
-      .where(eq(licenseKeysTable.id, license.id));
-  }
+  await db
+    .update(licenseKeysTable)
+    .set({ isUsed: true, usedByUserId: user.id, activatedAt: now })
+    .where(eq(licenseKeysTable.id, license.id));
 
   const [updated] = await db
     .select()
@@ -143,10 +147,11 @@ router.post("/license/activate", async (req, res): Promise<void> => {
 });
 
 router.post("/license/generate", async (req, res): Promise<void> => {
-  const { adminSecret, count, durationDays } = req.body as {
+  const { adminSecret, count, durationDays, plan } = req.body as {
     adminSecret?: string;
     count?: number;
     durationDays?: number;
+    plan?: string;
   };
 
   if (adminSecret !== ADMIN_SECRET) {
@@ -156,6 +161,7 @@ router.post("/license/generate", async (req, res): Promise<void> => {
 
   const safeCount = Math.min(Math.max(Number(count) || 1, 1), 100);
   const safeDays = Math.max(Number(durationDays) || 30, 1);
+  const safePlan = plan === "business" ? "business" : "basic";
 
   const keys: string[] = [];
   for (let i = 0; i < safeCount; i++) {
@@ -164,10 +170,10 @@ router.post("/license/generate", async (req, res): Promise<void> => {
   }
 
   await db.insert(licenseKeysTable).values(
-    keys.map((key) => ({ key, type: "paid" as const, durationDays: safeDays }))
+    keys.map((key) => ({ key, type: "paid" as const, plan: safePlan as "basic" | "business", durationDays: safeDays }))
   );
 
-  res.json({ keys, count: keys.length });
+  res.json({ keys, count: keys.length, plan: safePlan });
 });
 
 router.post("/license/start-trial", async (req, res): Promise<void> => {
