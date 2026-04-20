@@ -2,6 +2,7 @@ import { Link, useLocation } from "wouter";
 import { LayoutDashboard, Users, Activity, FileText, UserCircle, CalendarDays, Sun, Moon, Menu, X, ChevronLeft } from "lucide-react";
 import { useTheme } from "@/App";
 import { useState } from "react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
@@ -74,21 +75,41 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <nav className="flex-1 px-2 py-3 space-y-1">
             {navItems.map((item) => {
               const isActive = location === item.href || (item.href !== "/" && location.startsWith(item.href));
+              const linkClass = `flex items-center gap-3 rounded-xl text-sm font-medium transition-colors ${
+                collapsed ? "justify-center px-0 py-2.5" : "px-3 py-2.5"
+              } ${
+                isActive
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+              }`;
+
+              if (collapsed) {
+                return (
+                  <Tooltip key={item.href} delayDuration={100}>
+                    <TooltipTrigger asChild>
+                      <Link href={item.href} className={linkClass}>
+                        <item.icon className="w-4 h-4 shrink-0" />
+                      </Link>
+                    </TooltipTrigger>
+                    <TooltipContent side="right" className="font-medium">
+                      {item.label}
+                    </TooltipContent>
+                  </Tooltip>
+                );
+              }
+
               return (
                 <Link
                   key={item.href}
                   href={item.href}
-                  title={collapsed ? item.label : undefined}
-                  className={`flex items-center gap-3 rounded-xl text-sm font-medium transition-colors ${
-                    collapsed ? "justify-center px-0 py-2.5" : "px-3 py-2.5"
-                  } ${
+                  className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
                     isActive
                       ? "bg-primary text-primary-foreground shadow-sm"
                       : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                   }`}
                 >
                   <item.icon className="w-4 h-4 shrink-0" />
-                  {!collapsed && item.label}
+                  {item.label}
                 </Link>
               );
             })}
