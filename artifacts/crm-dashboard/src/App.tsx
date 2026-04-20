@@ -14,6 +14,7 @@ const Tarif = lazy(() => import("@/pages/tarif"));
 const Analitika = lazy(() => import("@/pages/analitika"));
 const Profil = lazy(() => import("@/pages/profil"));
 const Raspisanie = lazy(() => import("@/pages/raspisanie"));
+const TelegramBusiness = lazy(() => import("@/pages/telegram-business"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -50,6 +51,7 @@ function Router() {
           <Route path="/analitika" component={Analitika} />
           <Route path="/profil" component={Profil} />
           <Route path="/raspisanie" component={Raspisanie} />
+          <Route path="/telegram-business" component={TelegramBusiness} />
           <Route component={NotFound} />
         </Switch>
       </Suspense>

@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { LayoutDashboard, Users, Activity, FileText, UserCircle, CalendarDays, Sun, Moon, Menu, X, ChevronLeft } from "lucide-react";
+import { LayoutDashboard, Users, Activity, FileText, UserCircle, CalendarDays, Sun, Moon, Menu, X, ChevronLeft, Bot } from "lucide-react";
 import { useTheme } from "@/App";
 import { useState } from "react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -16,6 +16,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     { href: "/raspisanie", label: "Расписание", icon: CalendarDays },
     { href: "/tarif", label: "Тариф", icon: FileText },
     { href: "/analitika", label: "Аналитика", icon: Activity },
+    { href: "/telegram-business", label: "Telegram Business", icon: Bot },
     { href: "/profil", label: "Профиль", icon: UserCircle },
   ];
 
