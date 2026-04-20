@@ -86,15 +86,15 @@ export default function Tarif() {
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Настройка тарифа</h1>
-        <p className="text-muted-foreground">Научите AI-бота понимать ваши услуги и цены</p>
+        <h1 className="text-3xl font-bold tracking-tight">Настройка прайса и шаблона</h1>
+        <p className="text-muted-foreground">AI разбирает ваш прайс в структуру — бот работает по жёсткому шаблону с вашими данными</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card className="flex flex-col">
           <CardHeader>
             <CardTitle>Прайс-лист</CardTitle>
-            <CardDescription>Вставьте ваш прайс-лист в произвольном формате. Gemini AI автоматически разберёт его и настроит бота.</CardDescription>
+            <CardDescription>Вставьте прайс в любом формате. AI извлечёт структуру: названия, цены, единицы — и вставит в шаблон бота. Сам шаблон (правила поведения) остаётся неизменным.</CardDescription>
           </CardHeader>
           <CardContent className="flex-1 flex flex-col gap-4">
             <div className="space-y-2">
@@ -176,7 +176,8 @@ export default function Tarif() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label>Сгенерированный промпт для бота</Label>
+                    <Label>Шаблон бота с вашими данными</Label>
+                    <p className="text-xs text-muted-foreground">Правила поведения зафиксированы — AI только подставил ваш прайс</p>
                     <Textarea 
                       readOnly 
                       value={analyzedResult.botPrompt} 

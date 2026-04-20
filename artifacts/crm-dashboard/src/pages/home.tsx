@@ -16,10 +16,10 @@ export default function Home() {
       <section className="bg-card border border-border rounded-xl p-8 shadow-sm">
         <div className="max-w-3xl space-y-4">
           <h1 className="text-4xl font-extrabold tracking-tight text-foreground">
-            AI-бот в Telegram принимает заявки за вас
+            AI-бот в Telegram работает по вашим правилам
           </h1>
           <p className="text-xl text-muted-foreground">
-            Подключите бота к своему Telegram — он будет общаться с клиентами, узнавать детали заказа и автоматически добавлять заявки в CRM. Вы получаете уведомление и сразу закрываете сделку.
+            Загрузите прайс — AI разберёт его в структуру и вставит в жёсткий шаблон. Бот общается с клиентами по вашим правилам, узнаёт детали заказа и добавляет заявки в CRM. Стабильно, предсказуемо, без сюрпризов.
           </p>
           <div className="pt-4 flex flex-wrap gap-3">
             <Button
@@ -131,9 +131,9 @@ export default function Home() {
             { title: "AI-бот работает 24/7 — отвечает клиентам даже когда вы спите" },
             { title: "Принимает заявки через Telegram без вашего участия" },
             { title: "Автоматически расставляет приоритеты — горячие клиенты на первом месте" },
-            { title: "Gemini AI обрабатывает прайс-лист и настраивает бота под ваш бизнес" },
+            { title: "AI только парсит прайс в структуру — бот работает по вашему жёсткому шаблону, не придумывает правила сам" },
             { title: "Вы получаете уведомление в Telegram сразу после новой заявки" },
-            { title: "Простая настройка — загрузи прайс, и бот готов к работе" },
+            { title: "Простая настройка — загрузи прайс, бот получает структуру и готов к работе" },
           ].map((feature, i) => (
             <Card key={i} className="bg-card hover:border-primary/50 transition-colors">
               <CardContent className="p-6 flex gap-4 items-start">
