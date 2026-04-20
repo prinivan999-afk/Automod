@@ -18,6 +18,9 @@
 //   export type Post = typeof postsTable.$inferSelect;
 
 export * from "./leads";
+export * from "./business-connections";
+export * from "./automod-settings";
+export * from "./automod-messages";
 export * from "./tariff";
 export * from "./conversations";
 export * from "./messages";

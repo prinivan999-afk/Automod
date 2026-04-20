@@ -22,6 +22,8 @@ tags:
     description: Управление пользователями и API-токенами
   - name: gemini
     description: Gemini AI chat and image operations
+  - name: automod
+    description: Управление AutoMod для Telegram Business аккаунтов
 paths:
   /healthz:
     get:
@@ -499,6 +501,106 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/LeadChatMessage"
+
+  /automod/settings:
+    get:
+      operationId: getAutomodSettings
+      tags: [automod]
+      summary: Получить настройки AutoMod
+      responses:
+        "200":
+          description: Настройки AutoMod
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AutomodSettings"
+    post:
+      operationId: saveAutomodSettings
+      tags: [automod]
+      summary: Сохранить настройки AutoMod
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SaveAutomodSettingsBody"
+      responses:
+        "200":
+          description: Настройки сохранены
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AutomodSettings"
+
+  /automod/connections:
+    get:
+      operationId: listAutomodConnections
+      tags: [automod]
+      summary: Список подключённых Business аккаунтов
+      responses:
+        "200":
+          description: Список подключений
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BusinessConnection"
+
+  /automod/connections/{id}/toggle:
+    patch:
+      operationId: toggleAutomodConnection
+      tags: [automod]
+      summary: Включить/выключить AutoMod для подключения
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ToggleAutomodBody"
+      responses:
+        "200":
+          description: Обновлённое подключение
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BusinessConnection"
+        "404":
+          description: Не найдено
+
+  /automod/activity:
+    get:
+      operationId: getAutomodActivity
+      tags: [automod]
+      summary: Последние сообщения AutoMod
+      responses:
+        "200":
+          description: Список сообщений
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AutomodMessage"
+
+  /automod/stats:
+    get:
+      operationId: getAutomodStats
+      tags: [automod]
+      summary: Статистика AutoMod
+      responses:
+        "200":
+          description: Статистика
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AutomodStats"
 
   /gemini/conversations:
     get:
@@ -1078,6 +1180,134 @@ components:
       required:
         - keys
         - count
+
+    AutomodSettings:
+      type: object
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        aiName:
+          type: string
+        systemPrompt:
+          type: string
+        tone:
+          type: string
+          enum: [friendly, professional, formal]
+        isEnabled:
+          type: boolean
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required:
+        - id
+        - userId
+        - aiName
+        - systemPrompt
+        - tone
+        - isEnabled
+        - createdAt
+        - updatedAt
+
+    SaveAutomodSettingsBody:
+      type: object
+      properties:
+        aiName:
+          type: string
+        systemPrompt:
+          type: string
+        tone:
+          type: string
+          enum: [friendly, professional, formal]
+        isEnabled:
+          type: boolean
+      required:
+        - aiName
+        - systemPrompt
+        - tone
+        - isEnabled
+
+    BusinessConnection:
+      type: object
+      properties:
+        id:
+          type: integer
+        userId:
+          type: ["integer", "null"]
+        businessConnectionId:
+          type: string
+        name:
+          type: string
+        username:
+          type: ["string", "null"]
+        isEnabled:
+          type: boolean
+        messagesHandled:
+          type: integer
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required:
+        - id
+        - businessConnectionId
+        - name
+        - isEnabled
+        - messagesHandled
+        - createdAt
+        - updatedAt
+
+    ToggleAutomodBody:
+      type: object
+      properties:
+        isEnabled:
+          type: boolean
+      required:
+        - isEnabled
+
+    AutomodMessage:
+      type: object
+      properties:
+        id:
+          type: integer
+        businessConnectionId:
+          type: string
+        fromUsername:
+          type: ["string", "null"]
+        userMessage:
+          type: string
+        aiResponse:
+          type: string
+        createdAt:
+          type: string
+      required:
+        - id
+        - businessConnectionId
+        - userMessage
+        - aiResponse
+        - createdAt
+
+    AutomodStats:
+      type: object
+      properties:
+        totalConnections:
+          type: integer
+        activeConnections:
+          type: integer
+        totalMessagesHandled:
+          type: integer
+        todayMessages:
+          type: integer
+        isGlobalEnabled:
+          type: boolean
+      required:
+        - totalConnections
+        - activeConnections
+        - totalMessagesHandled
+        - todayMessages
+        - isGlobalEnabled
 
     GeminiConversation:
       type: object

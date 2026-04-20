@@ -330,6 +330,78 @@ export interface GeneratedKeys {
   count: number;
 }
 
+export type AutomodSettingsTone =
+  (typeof AutomodSettingsTone)[keyof typeof AutomodSettingsTone];
+
+export const AutomodSettingsTone = {
+  friendly: "friendly",
+  professional: "professional",
+  formal: "formal",
+} as const;
+
+export interface AutomodSettings {
+  id: number;
+  userId: number;
+  aiName: string;
+  systemPrompt: string;
+  tone: AutomodSettingsTone;
+  isEnabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type SaveAutomodSettingsBodyTone =
+  (typeof SaveAutomodSettingsBodyTone)[keyof typeof SaveAutomodSettingsBodyTone];
+
+export const SaveAutomodSettingsBodyTone = {
+  friendly: "friendly",
+  professional: "professional",
+  formal: "formal",
+} as const;
+
+export interface SaveAutomodSettingsBody {
+  aiName: string;
+  systemPrompt: string;
+  tone: SaveAutomodSettingsBodyTone;
+  isEnabled: boolean;
+}
+
+export interface BusinessConnection {
+  id: number;
+  /** @nullable */
+  userId?: number | null;
+  businessConnectionId: string;
+  name: string;
+  /** @nullable */
+  username?: string | null;
+  isEnabled: boolean;
+  messagesHandled: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ToggleAutomodBody {
+  isEnabled: boolean;
+}
+
+export interface AutomodMessage {
+  id: number;
+  businessConnectionId: string;
+  /** @nullable */
+  fromUsername?: string | null;
+  userMessage: string;
+  aiResponse: string;
+  createdAt: string;
+}
+
+export interface AutomodStats {
+  totalConnections: number;
+  activeConnections: number;
+  totalMessagesHandled: number;
+  todayMessages: number;
+  isGlobalEnabled: boolean;
+}
+
 export interface GeminiConversation {
   id: number;
   title: string;

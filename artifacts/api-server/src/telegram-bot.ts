@@ -12,6 +12,9 @@ import {
   botConversationsTable,
   telegramProcessedUpdatesTable,
   licenseKeysTable,
+  businessConnectionsTable,
+  automodSettingsTable,
+  automodMessagesTable,
 } from "@workspace/db";
 import { sql } from "drizzle-orm";
 import { ai } from "@workspace/integrations-gemini-ai";
@@ -530,7 +533,16 @@ export async function startTelegramBot() {
   // Wait briefly to allow old polling connections to terminate
   await new Promise((resolve) => setTimeout(resolve, 2000));
 
-  const bot = new TelegramBot(BOT_TOKEN, { polling: true });
+  const bot = new TelegramBot(BOT_TOKEN, {
+    polling: {
+      params: {
+        allowed_updates: JSON.stringify([
+          "message", "callback_query", "contact",
+          "business_connection", "business_message", "edited_business_message", "deleted_business_messages"
+        ]),
+      },
+    } as any,
+  });
 
   // Catch polling errors (e.g. 409 Conflict, network errors)
   bot.on("polling_error", (err) => {
@@ -577,6 +589,19 @@ export async function startTelegramBot() {
           console.log(`[TelegramBot] Skipping duplicate update ${update.update_id}`);
           return;
         }
+
+        // Handle Telegram Business Connection updates
+        if (update.business_connection) {
+          await handleBusinessConnection(update.business_connection);
+          return;
+        }
+
+        // Handle Telegram Business Messages (DMs on connected Business account)
+        if (update.business_message) {
+          await handleBusinessMessage(bot, update.business_message);
+          return;
+        }
+
         originalProcessUpdate(update);
       } catch (err) {
         console.error("[TelegramBot] Dedup DB error, processing anyway:", err);
@@ -584,6 +609,131 @@ export async function startTelegramBot() {
       }
     })();
   };
+
+  // Handle a Telegram Business Connection event (bot connected/disconnected to a Business account)
+  async function handleBusinessConnection(conn: any) {
+    console.log("[TelegramBot] Business connection update:", conn.id, "enabled:", conn.is_enabled);
+    if (conn.is_enabled) {
+      const userId = conn.user?.id;
+      // Find matching user by telegram_user_id
+      const [user] = await db
+        .select()
+        .from(usersTable)
+        .where(eq(usersTable.telegramUserId, String(userId)))
+        .limit(1);
+
+      const name = [conn.user?.first_name, conn.user?.last_name].filter(Boolean).join(" ") || `Business ${conn.id}`;
+      await db
+        .insert(businessConnectionsTable)
+        .values({
+          userId: user?.id ?? null,
+          businessConnectionId: conn.id,
+          name,
+          username: conn.user?.username ?? null,
+          isEnabled: true,
+          messagesHandled: 0,
+        })
+        .onConflictDoUpdate({
+          target: businessConnectionsTable.businessConnectionId,
+          set: {
+            userId: user?.id ?? null,
+            name,
+            username: conn.user?.username ?? null,
+            isEnabled: true,
+          },
+        });
+    } else {
+      // Disabled: mark as not enabled
+      await db
+        .update(businessConnectionsTable)
+        .set({ isEnabled: false })
+        .where(eq(businessConnectionsTable.businessConnectionId, conn.id));
+    }
+  }
+
+  // Handle incoming messages on a Business account's DM
+  async function handleBusinessMessage(bot: TelegramBot, msg: any) {
+    const connId: string = msg.business_connection_id;
+    if (!connId) return;
+
+    // Bot's own messages should not be auto-responded to
+    if (msg.from?.is_bot) return;
+
+    const text: string = msg.text ?? msg.caption ?? "";
+    if (!text.trim()) return;
+
+    const chatId = String(msg.chat.id);
+
+    // Find the business connection record
+    const [conn] = await db
+      .select()
+      .from(businessConnectionsTable)
+      .where(eq(businessConnectionsTable.businessConnectionId, connId))
+      .limit(1);
+
+    if (!conn || !conn.isEnabled) return;
+
+    // Get AutoMod settings for the user
+    let settings = null;
+    if (conn.userId) {
+      const [s] = await db
+        .select()
+        .from(automodSettingsTable)
+        .where(eq(automodSettingsTable.userId, conn.userId))
+        .limit(1);
+      settings = s ?? null;
+    }
+
+    if (settings && !settings.isEnabled) return;
+
+    const aiName = settings?.aiName ?? "Ассистент";
+    const systemPrompt = settings?.systemPrompt ?? "Ты вежливый и полезный ассистент для бизнеса. Отвечай кратко и по делу.";
+    const tone = settings?.tone ?? "friendly";
+
+    const toneDesc = tone === "professional" ? "Общайся профессионально и уважительно." : tone === "formal" ? "Общайся строго официально." : "Общайся дружелюбно и тепло.";
+
+    try {
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: [
+          {
+            role: "user",
+            parts: [
+              {
+                text: `${systemPrompt}\n${toneDesc}\n\nТвоё имя: ${aiName}\n\nСообщение клиента: ${text}\n\nОтветь кратко и по делу. Пиши обычным текстом без форматирования Markdown.`,
+              },
+            ],
+          },
+        ],
+        config: { maxOutputTokens: 8192 },
+      });
+
+      const aiReply = response.text ?? "Спасибо за обращение! Наш менеджер свяжется с вами.";
+
+      // Send reply via Business connection
+      await (bot as any).sendMessage(chatId, aiReply, {
+        business_connection_id: connId,
+      } as any);
+
+      // Log the message
+      await db.insert(automodMessagesTable).values({
+        businessConnectionId: connId,
+        fromUserId: String(msg.from?.id ?? ""),
+        fromUsername: msg.from?.username ?? null,
+        userMessage: text,
+        aiResponse: aiReply,
+      });
+
+      // Increment messages handled counter
+      await db
+        .update(businessConnectionsTable)
+        .set({ messagesHandled: sql`${businessConnectionsTable.messagesHandled} + 1` })
+        .where(eq(businessConnectionsTable.businessConnectionId, connId));
+
+    } catch (err) {
+      console.error("[TelegramBot] AutoMod response error:", err);
+    }
+  }
 
   // Clean up old processed update IDs every hour (keep only last 24h)
   setInterval(async () => {

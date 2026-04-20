@@ -21,7 +21,11 @@ import type {
   AnalyticsSummary,
   AnalyzeTariffBody,
   AnalyzeTariffResponse,
+  AutomodMessage,
+  AutomodSettings,
+  AutomodStats,
   BotAccount,
+  BusinessConnection,
   CreateGeminiConversationBody,
   CreateLeadBody,
   ErrorResponse,
@@ -42,11 +46,13 @@ import type {
   ListLeadsParams,
   PlatformCount,
   RegisterUserBody,
+  SaveAutomodSettingsBody,
   SaveBotAccountBody,
   SaveTariffSettingsBody,
   SendGeminiMessageBody,
   StatusCount,
   TariffSettings,
+  ToggleAutomodBody,
   UpdateLeadBody,
   UpdateLeadStatusBody,
   UserProfile,
@@ -1877,6 +1883,480 @@ export function useListLeadChatMessages<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getListLeadChatMessagesQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Получить настройки AutoMod
+ */
+export const getGetAutomodSettingsUrl = () => {
+  return `/api/automod/settings`;
+};
+
+export const getAutomodSettings = async (
+  options?: RequestInit,
+): Promise<AutomodSettings> => {
+  return customFetch<AutomodSettings>(getGetAutomodSettingsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetAutomodSettingsQueryKey = () => {
+  return [`/api/automod/settings`] as const;
+};
+
+export const getGetAutomodSettingsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAutomodSettings>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getAutomodSettings>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetAutomodSettingsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getAutomodSettings>>
+  > = ({ signal }) => getAutomodSettings({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getAutomodSettings>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetAutomodSettingsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getAutomodSettings>>
+>;
+export type GetAutomodSettingsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Получить настройки AutoMod
+ */
+
+export function useGetAutomodSettings<
+  TData = Awaited<ReturnType<typeof getAutomodSettings>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getAutomodSettings>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetAutomodSettingsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Сохранить настройки AutoMod
+ */
+export const getSaveAutomodSettingsUrl = () => {
+  return `/api/automod/settings`;
+};
+
+export const saveAutomodSettings = async (
+  saveAutomodSettingsBody: SaveAutomodSettingsBody,
+  options?: RequestInit,
+): Promise<AutomodSettings> => {
+  return customFetch<AutomodSettings>(getSaveAutomodSettingsUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(saveAutomodSettingsBody),
+  });
+};
+
+export const getSaveAutomodSettingsMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof saveAutomodSettings>>,
+    TError,
+    { data: BodyType<SaveAutomodSettingsBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof saveAutomodSettings>>,
+  TError,
+  { data: BodyType<SaveAutomodSettingsBody> },
+  TContext
+> => {
+  const mutationKey = ["saveAutomodSettings"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof saveAutomodSettings>>,
+    { data: BodyType<SaveAutomodSettingsBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return saveAutomodSettings(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SaveAutomodSettingsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof saveAutomodSettings>>
+>;
+export type SaveAutomodSettingsMutationBody = BodyType<SaveAutomodSettingsBody>;
+export type SaveAutomodSettingsMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Сохранить настройки AutoMod
+ */
+export const useSaveAutomodSettings = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof saveAutomodSettings>>,
+    TError,
+    { data: BodyType<SaveAutomodSettingsBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof saveAutomodSettings>>,
+  TError,
+  { data: BodyType<SaveAutomodSettingsBody> },
+  TContext
+> => {
+  return useMutation(getSaveAutomodSettingsMutationOptions(options));
+};
+
+/**
+ * @summary Список подключённых Business аккаунтов
+ */
+export const getListAutomodConnectionsUrl = () => {
+  return `/api/automod/connections`;
+};
+
+export const listAutomodConnections = async (
+  options?: RequestInit,
+): Promise<BusinessConnection[]> => {
+  return customFetch<BusinessConnection[]>(getListAutomodConnectionsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListAutomodConnectionsQueryKey = () => {
+  return [`/api/automod/connections`] as const;
+};
+
+export const getListAutomodConnectionsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listAutomodConnections>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listAutomodConnections>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListAutomodConnectionsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listAutomodConnections>>
+  > = ({ signal }) => listAutomodConnections({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listAutomodConnections>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListAutomodConnectionsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listAutomodConnections>>
+>;
+export type ListAutomodConnectionsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Список подключённых Business аккаунтов
+ */
+
+export function useListAutomodConnections<
+  TData = Awaited<ReturnType<typeof listAutomodConnections>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listAutomodConnections>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListAutomodConnectionsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Включить/выключить AutoMod для подключения
+ */
+export const getToggleAutomodConnectionUrl = (id: number) => {
+  return `/api/automod/connections/${id}/toggle`;
+};
+
+export const toggleAutomodConnection = async (
+  id: number,
+  toggleAutomodBody: ToggleAutomodBody,
+  options?: RequestInit,
+): Promise<BusinessConnection> => {
+  return customFetch<BusinessConnection>(getToggleAutomodConnectionUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(toggleAutomodBody),
+  });
+};
+
+export const getToggleAutomodConnectionMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof toggleAutomodConnection>>,
+    TError,
+    { id: number; data: BodyType<ToggleAutomodBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof toggleAutomodConnection>>,
+  TError,
+  { id: number; data: BodyType<ToggleAutomodBody> },
+  TContext
+> => {
+  const mutationKey = ["toggleAutomodConnection"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof toggleAutomodConnection>>,
+    { id: number; data: BodyType<ToggleAutomodBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return toggleAutomodConnection(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ToggleAutomodConnectionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof toggleAutomodConnection>>
+>;
+export type ToggleAutomodConnectionMutationBody = BodyType<ToggleAutomodBody>;
+export type ToggleAutomodConnectionMutationError = ErrorType<void>;
+
+/**
+ * @summary Включить/выключить AutoMod для подключения
+ */
+export const useToggleAutomodConnection = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof toggleAutomodConnection>>,
+    TError,
+    { id: number; data: BodyType<ToggleAutomodBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof toggleAutomodConnection>>,
+  TError,
+  { id: number; data: BodyType<ToggleAutomodBody> },
+  TContext
+> => {
+  return useMutation(getToggleAutomodConnectionMutationOptions(options));
+};
+
+/**
+ * @summary Последние сообщения AutoMod
+ */
+export const getGetAutomodActivityUrl = () => {
+  return `/api/automod/activity`;
+};
+
+export const getAutomodActivity = async (
+  options?: RequestInit,
+): Promise<AutomodMessage[]> => {
+  return customFetch<AutomodMessage[]>(getGetAutomodActivityUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetAutomodActivityQueryKey = () => {
+  return [`/api/automod/activity`] as const;
+};
+
+export const getGetAutomodActivityQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAutomodActivity>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getAutomodActivity>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetAutomodActivityQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getAutomodActivity>>
+  > = ({ signal }) => getAutomodActivity({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getAutomodActivity>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetAutomodActivityQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getAutomodActivity>>
+>;
+export type GetAutomodActivityQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Последние сообщения AutoMod
+ */
+
+export function useGetAutomodActivity<
+  TData = Awaited<ReturnType<typeof getAutomodActivity>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getAutomodActivity>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetAutomodActivityQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Статистика AutoMod
+ */
+export const getGetAutomodStatsUrl = () => {
+  return `/api/automod/stats`;
+};
+
+export const getAutomodStats = async (
+  options?: RequestInit,
+): Promise<AutomodStats> => {
+  return customFetch<AutomodStats>(getGetAutomodStatsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetAutomodStatsQueryKey = () => {
+  return [`/api/automod/stats`] as const;
+};
+
+export const getGetAutomodStatsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAutomodStats>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getAutomodStats>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetAutomodStatsQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getAutomodStats>>> = ({
+    signal,
+  }) => getAutomodStats({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getAutomodStats>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetAutomodStatsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getAutomodStats>>
+>;
+export type GetAutomodStatsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Статистика AutoMod
+ */
+
+export function useGetAutomodStats<
+  TData = Awaited<ReturnType<typeof getAutomodStats>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getAutomodStats>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetAutomodStatsQueryOptions(options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

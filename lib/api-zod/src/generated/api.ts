@@ -434,6 +434,108 @@ export const ListLeadChatMessagesResponse = zod.array(
 );
 
 /**
+ * @summary Получить настройки AutoMod
+ */
+export const GetAutomodSettingsResponse = zod.object({
+  id: zod.number(),
+  userId: zod.number(),
+  aiName: zod.string(),
+  systemPrompt: zod.string(),
+  tone: zod.enum(["friendly", "professional", "formal"]),
+  isEnabled: zod.boolean(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+});
+
+/**
+ * @summary Сохранить настройки AutoMod
+ */
+export const SaveAutomodSettingsBody = zod.object({
+  aiName: zod.string(),
+  systemPrompt: zod.string(),
+  tone: zod.enum(["friendly", "professional", "formal"]),
+  isEnabled: zod.boolean(),
+});
+
+export const SaveAutomodSettingsResponse = zod.object({
+  id: zod.number(),
+  userId: zod.number(),
+  aiName: zod.string(),
+  systemPrompt: zod.string(),
+  tone: zod.enum(["friendly", "professional", "formal"]),
+  isEnabled: zod.boolean(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+});
+
+/**
+ * @summary Список подключённых Business аккаунтов
+ */
+export const ListAutomodConnectionsResponseItem = zod.object({
+  id: zod.number(),
+  userId: zod.number().nullish(),
+  businessConnectionId: zod.string(),
+  name: zod.string(),
+  username: zod.string().nullish(),
+  isEnabled: zod.boolean(),
+  messagesHandled: zod.number(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+});
+export const ListAutomodConnectionsResponse = zod.array(
+  ListAutomodConnectionsResponseItem,
+);
+
+/**
+ * @summary Включить/выключить AutoMod для подключения
+ */
+export const ToggleAutomodConnectionParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const ToggleAutomodConnectionBody = zod.object({
+  isEnabled: zod.boolean(),
+});
+
+export const ToggleAutomodConnectionResponse = zod.object({
+  id: zod.number(),
+  userId: zod.number().nullish(),
+  businessConnectionId: zod.string(),
+  name: zod.string(),
+  username: zod.string().nullish(),
+  isEnabled: zod.boolean(),
+  messagesHandled: zod.number(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+});
+
+/**
+ * @summary Последние сообщения AutoMod
+ */
+export const GetAutomodActivityResponseItem = zod.object({
+  id: zod.number(),
+  businessConnectionId: zod.string(),
+  fromUsername: zod.string().nullish(),
+  userMessage: zod.string(),
+  aiResponse: zod.string(),
+  createdAt: zod.string(),
+});
+export const GetAutomodActivityResponse = zod.array(
+  GetAutomodActivityResponseItem,
+);
+
+/**
+ * @summary Статистика AutoMod
+ */
+export const GetAutomodStatsResponse = zod.object({
+  totalConnections: zod.number(),
+  activeConnections: zod.number(),
+  totalMessagesHandled: zod.number(),
+  todayMessages: zod.number(),
+  isGlobalEnabled: zod.boolean(),
+});
+
+/**
  * @summary List all conversations
  */
 export const ListGeminiConversationsResponseItem = zod.object({
