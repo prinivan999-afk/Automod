@@ -69,3 +69,16 @@ POST /api/leads
 - `lib/integrations-gemini-ai/` — Gemini client and helper modules
 - `lib/db/src/schema/bot-accounts.ts` — connected messaging account records
 - `lib/db/src/schema/lead-chat-messages.ts` — CRM lead notification chat messages
+- `artifacts/api-server/src/telegram-bot.ts` — Telegram bot (polling), handles buyer conversations and seller verification
+- `artifacts/api-server/src/routes/users.ts` — Seller registration, profile, and verification endpoints
+
+## Telegram Seller Verification Flow
+
+1. Seller clicks "Подтвердить через Telegram" on their profile page
+2. Frontend calls `POST /api/users/request-verification` → generates 8-char hex code, stores in `users.verificationCode`
+3. Response includes `{code, botUsername}` → frontend opens `https://t.me/{botUsername}?start=v_{CODE}`
+4. Seller clicks Start in Telegram; bot receives `/start v_CODE`
+5. Bot looks up user by `verificationCode`, sets `telegramUsernameVerified=true`, clears the code
+6. Frontend polls `GET /api/users/profile` every 3 s until verified → shows success toast
+
+Bot only runs in production (`BOT_ENABLED=true`). Dev uses env var `TELEGRAM_BOT_USERNAME=AutoMind5_bot` for deep-link generation without bot running.

@@ -46,5 +46,6 @@ channel = "stable-25_05"
 
 [userenv.shared]
 ADMIN_SECRET = "automind-admin-secret-2024"
+TELEGRAM_BOT_USERNAME = "AutoMind5_bot"
 
 [userenv.development]

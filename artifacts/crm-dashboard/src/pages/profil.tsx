@@ -51,6 +51,9 @@ export default function Profil() {
   const [loggedInRecoveryToken, setLoggedInRecoveryToken] = useState("");
   const [recoveryError, setRecoveryError] = useState("");
   const [isRecovering, setIsRecovering] = useState(false);
+  const [isRequestingCode, setIsRequestingCode] = useState(false);
+  const [verifyDeepLink, setVerifyDeepLink] = useState<string | null>(null);
+  const [isPollingVerification, setIsPollingVerification] = useState(false);
 
   const handleRefreshStatus = async () => {
     if (!profile?.apiToken) return;
@@ -81,6 +84,62 @@ export default function Profil() {
       toast.error("Токен устарел или недействителен. Восстановите доступ.");
     } finally {
       setIsRefreshing(false);
+    }
+  };
+
+  const handleVerifyViaTelegram = async () => {
+    if (!profile?.apiToken) return;
+    setIsRequestingCode(true);
+    try {
+      const res = await fetch("/api/users/request-verification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ apiToken: profile.apiToken }),
+      });
+      const data = await res.json();
+      if (data.alreadyVerified) {
+        toast.success("Аккаунт уже верифицирован!");
+        const updated = { ...profile, telegramUsernameVerified: true };
+        setProfile(updated);
+        localStorage.setItem("crm_profile", JSON.stringify(updated));
+        return;
+      }
+      if (!data.code || !data.botUsername) {
+        toast.error("Не удалось получить ссылку. Попробуйте позже.");
+        return;
+      }
+      const deepLink = `https://t.me/${data.botUsername}?start=v_${data.code}`;
+      setVerifyDeepLink(deepLink);
+      // Open Telegram automatically
+      window.open(deepLink, "_blank");
+      // Start polling for verification
+      setIsPollingVerification(true);
+      const pollInterval = setInterval(async () => {
+        try {
+          const pollRes = await fetch(`/api/users/profile?apiToken=${encodeURIComponent(profile.apiToken)}`);
+          if (pollRes.ok) {
+            const pollData = await pollRes.json();
+            if (pollData.telegramUsernameVerified) {
+              clearInterval(pollInterval);
+              setIsPollingVerification(false);
+              setVerifyDeepLink(null);
+              const updated = { ...profile, telegramUsernameVerified: true };
+              setProfile(updated);
+              localStorage.setItem("crm_profile", JSON.stringify(updated));
+              toast.success("✅ Аккаунт успешно верифицирован!");
+            }
+          }
+        } catch { /* ignore */ }
+      }, 3000);
+      // Stop polling after 5 minutes
+      setTimeout(() => {
+        clearInterval(pollInterval);
+        setIsPollingVerification(false);
+      }, 5 * 60 * 1000);
+    } catch {
+      toast.error("Ошибка при запросе верификации");
+    } finally {
+      setIsRequestingCode(false);
     }
   };
 
@@ -456,22 +515,39 @@ export default function Profil() {
                 </div>
 
                 {!isVerified && (
-                  <div className="rounded-md border border-yellow-500/20 bg-yellow-500/5 p-3 text-sm text-yellow-600 dark:text-yellow-400 space-y-2">
+                  <div className="rounded-md border border-yellow-500/20 bg-yellow-500/5 p-3 text-sm text-yellow-600 dark:text-yellow-400 space-y-3">
                     <p className="font-medium">Требуется верификация</p>
-                    <p className="text-xs">
-                      Пока username не верифицирован, покупатели не смогут найти вас. Отправьте команду{" "}
-                      <code className="bg-black/10 dark:bg-white/10 px-1 rounded">/token</code> боту.
+                    <p className="text-xs text-muted-foreground">
+                      Нажмите кнопку — откроется Telegram и бот автоматически подтвердит ваш аккаунт. Ничего копировать не нужно.
                     </p>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="w-full border-yellow-500/30 text-yellow-600 dark:text-yellow-400 hover:bg-yellow-500/10"
-                      onClick={handleRefreshStatus}
-                      disabled={isRefreshing}
-                    >
-                      <RefreshCw className={`w-3 h-3 mr-2 ${isRefreshing ? "animate-spin" : ""}`} />
-                      {isRefreshing ? "Проверяем..." : "Я отправил команду — проверить статус"}
-                    </Button>
+                    {verifyDeepLink ? (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <RefreshCw className="w-3 h-3 animate-spin shrink-0" />
+                          {isPollingVerification ? "Ожидаем подтверждения от Telegram..." : "Откройте ссылку в Telegram"}
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="w-full border-yellow-500/30 text-yellow-600 dark:text-yellow-400 hover:bg-yellow-500/10"
+                          onClick={() => window.open(verifyDeepLink, "_blank")}
+                        >
+                          <Send className="w-3 h-3 mr-2" />
+                          Открыть Telegram ещё раз
+                        </Button>
+                      </div>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="w-full border-yellow-500/30 text-yellow-600 dark:text-yellow-400 hover:bg-yellow-500/10"
+                        onClick={handleVerifyViaTelegram}
+                        disabled={isRequestingCode}
+                      >
+                        <Send className="w-3 h-3 mr-2" />
+                        {isRequestingCode ? "Генерируем ссылку..." : "Подтвердить через Telegram"}
+                      </Button>
+                    )}
                   </div>
                 )}
 

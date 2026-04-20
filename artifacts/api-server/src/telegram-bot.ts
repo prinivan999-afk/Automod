@@ -14,6 +14,7 @@ import {
 } from "@workspace/db";
 import { sql } from "drizzle-orm";
 import { ai } from "@workspace/integrations-gemini-ai";
+import { setBotUsername } from "./routes/users";
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
@@ -530,6 +531,17 @@ export async function startTelegramBot() {
 
   const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 
+  // Cache bot username for deep links
+  try {
+    const me = await bot.getMe();
+    if (me.username) {
+      setBotUsername(me.username);
+      console.log(`[TelegramBot] Bot username: @${me.username}`);
+    }
+  } catch (e) {
+    console.warn("[TelegramBot] Could not get bot info:", e);
+  }
+
   // Database-based deduplication — atomic across ALL server instances (dev + prod).
   // Uses PostgreSQL primary key conflict: only the first INSERT succeeds.
   const originalProcessUpdate = (bot as any).processUpdate.bind(bot);
@@ -565,6 +577,65 @@ export async function startTelegramBot() {
   bot.onText(/\/start(?:\s+(\S+))?/, async (msg, match) => {
     const chatId = String(msg.chat.id);
     const deepLinkParam = match?.[1]?.trim();
+
+    // Deep link: /start v_CODE — account verification
+    if (deepLinkParam?.startsWith("v_")) {
+      const code = deepLinkParam.slice(2).toUpperCase();
+      const [userByCode] = await db
+        .select()
+        .from(usersTable)
+        .where(eq(usersTable.verificationCode, code))
+        .limit(1);
+
+      if (!userByCode) {
+        await bot.sendMessage(chatId,
+          `❌ Код верификации не найден или уже использован.\n\nПопробуйте запросить новый код на сайте.`
+        );
+        return;
+      }
+
+      const realUsername = msg.from?.username?.toLowerCase();
+      const realTelegramUserId = String(msg.from!.id);
+
+      if (!realUsername) {
+        await bot.sendMessage(chatId,
+          `❌ У вас не установлен username в Telegram.\n\nУстановите его в Настройки → Изменить профиль → Имя пользователя, затем попробуйте снова.`
+        );
+        return;
+      }
+
+      // Check if this Telegram ID is already linked to a different verified account
+      const [existingByTgId] = await db
+        .select()
+        .from(usersTable)
+        .where(eq(usersTable.telegramUserId, realTelegramUserId))
+        .limit(1);
+
+      if (existingByTgId && existingByTgId.id !== userByCode.id && existingByTgId.telegramUsernameVerified) {
+        await bot.sendMessage(chatId,
+          `⛔ Ваш Telegram уже привязан к аккаунту *@${existingByTgId.telegramUsername}*.\n\nОдин Telegram — один аккаунт.`,
+          { parse_mode: "Markdown" }
+        );
+        return;
+      }
+
+      await db
+        .update(usersTable)
+        .set({
+          telegramChatId: chatId,
+          telegramUserId: realTelegramUserId,
+          telegramUsernameVerified: true,
+          telegramUsername: realUsername,
+          verificationCode: null,
+        })
+        .where(eq(usersTable.id, userByCode.id));
+
+      await bot.sendMessage(chatId,
+        `✅ Аккаунт *@${realUsername}* успешно верифицирован!\n\n📩 Теперь покупатели смогут найти вас через бота, а новые заявки будут приходить сюда.`,
+        { parse_mode: "Markdown" }
+      );
+      return;
+    }
 
     // Deep link: /start username — auto-set seller context
     if (deepLinkParam) {

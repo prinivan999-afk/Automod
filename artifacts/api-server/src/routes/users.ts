@@ -6,8 +6,18 @@ import { RegisterUserBody, GetUserProfileQueryParams } from "@workspace/api-zod"
 
 const router: IRouter = Router();
 
+let cachedBotUsername: string | null = process.env.TELEGRAM_BOT_USERNAME ?? null;
+
+export function setBotUsername(username: string) {
+  cachedBotUsername = username;
+}
+
 function generateToken(): string {
   return randomBytes(32).toString("hex");
+}
+
+function generateVerificationCode(): string {
+  return randomBytes(4).toString("hex").toUpperCase();
 }
 
 router.post("/users/register", async (req, res): Promise<void> => {
@@ -29,16 +39,13 @@ router.post("/users/register", async (req, res): Promise<void> => {
   if (existing.length > 0) {
     const existingUser = existing[0];
 
-    // If the account is already verified — block registration under this username.
-    // Only the real owner can log in via the Telegram bot /token command.
     if (existingUser.telegramUsernameVerified) {
       res.status(409).json({
-        error: `Аккаунт @${cleanUsername} уже зарегистрирован и верифицирован. Если это ваш аккаунт — восстановите доступ через Telegram-бота командой /token.`,
+        error: `Аккаунт @${cleanUsername} уже зарегистрирован и верифицирован.`,
       });
       return;
     }
 
-    // Not yet verified — safe to return so the user can complete verification
     res.json(formatUser(existingUser));
     return;
   }
@@ -102,6 +109,42 @@ router.post("/users/regenerate-token", async (req, res): Promise<void> => {
     .returning();
 
   res.json(formatUser(updated));
+});
+
+router.post("/users/request-verification", async (req, res): Promise<void> => {
+  const apiToken = req.body?.apiToken as string | undefined;
+  if (!apiToken) {
+    res.status(400).json({ error: "apiToken обязателен" });
+    return;
+  }
+
+  const [user] = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.apiToken, apiToken))
+    .limit(1);
+
+  if (!user) {
+    res.status(404).json({ error: "Пользователь не найден" });
+    return;
+  }
+
+  if (user.telegramUsernameVerified) {
+    res.json({ alreadyVerified: true, botUsername: cachedBotUsername });
+    return;
+  }
+
+  const code = generateVerificationCode();
+  await db
+    .update(usersTable)
+    .set({ verificationCode: code })
+    .where(eq(usersTable.id, user.id));
+
+  res.json({ code, botUsername: cachedBotUsername });
+});
+
+router.get("/users/bot-username", async (_req, res): Promise<void> => {
+  res.json({ botUsername: cachedBotUsername });
 });
 
 function formatUser(user: typeof usersTable.$inferSelect) {
