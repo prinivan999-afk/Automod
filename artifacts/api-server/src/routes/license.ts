@@ -104,8 +104,8 @@ router.post("/license/activate", async (req, res): Promise<void> => {
     return;
   }
 
-  if (license.isUsed && license.usedByUserId !== user.id) {
-    res.status(400).json({ error: "Этот ключ уже был использован другим аккаунтом." });
+  if (license.isUsed) {
+    res.status(400).json({ error: "Этот ключ уже был использован." });
     return;
   }
 
