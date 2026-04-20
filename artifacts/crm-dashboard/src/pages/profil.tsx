@@ -73,11 +73,11 @@ export default function Profil() {
         if (updated.telegramUsernameVerified) {
           toast.success("Username верифицирован!");
         } else {
-          toast.info("Верификация ещё не выполнена. Отправьте /token боту.");
+          toast.info("Верификация ещё не выполнена. Подтвердите аккаунт через Telegram.");
         }
       } else {
         setTokenMismatch(true);
-        toast.error("Токен устарел. Восстановите доступ через /mytoken в боте.");
+        toast.error("Токен устарел. Отправьте /register боту и войдите с новым токеном.");
       }
     } catch {
       setTokenMismatch(true);
@@ -162,7 +162,7 @@ export default function Profil() {
             return;
           }
         }
-        setRecoveryError("Токен не найден. Отправьте /mytoken боту и скопируйте токен из ответа.");
+        setRecoveryError("Токен не найден. Отправьте /register боту и скопируйте токен из ответа.");
         return;
       }
       const data = await res.json();
@@ -434,7 +434,7 @@ export default function Profil() {
                   <div>
                     <p className="text-sm font-semibold text-amber-400 mb-1">Восстановление доступа</p>
                     <p className="text-xs text-muted-foreground">
-                      Отправьте боту <code className="bg-muted px-1 rounded">/mytoken</code> из Telegram и вставьте полученный токен:
+                      Отправьте боту <code className="bg-muted px-1 rounded">/register</code> из Telegram и вставьте полученный токен:
                     </p>
                   </div>
                   <div className="flex gap-2">
@@ -535,7 +535,7 @@ export default function Profil() {
                     <div>
                       <p className="text-sm font-semibold text-red-400 mb-1">⚠️ Токен устарел</p>
                       <p className="text-xs text-muted-foreground">
-                        Отправьте <code className="bg-muted px-1 rounded">/mytoken</code> или <code className="bg-muted px-1 rounded">/register</code> боту в Telegram и вставьте полученный токен:
+                        Отправьте <code className="bg-muted px-1 rounded">/register</code> боту в Telegram и вставьте полученный токен:
                       </p>
                     </div>
                     <button
@@ -547,7 +547,7 @@ export default function Profil() {
                   </div>
                   <div className="flex gap-2">
                     <Input
-                      placeholder="Вставьте токен из /mytoken"
+                      placeholder="Вставьте токен из /register"
                       value={loggedInRecoveryToken}
                       onChange={(e) => { setLoggedInRecoveryToken(e.target.value); setRecoveryError(""); }}
                       className="font-mono text-xs"
