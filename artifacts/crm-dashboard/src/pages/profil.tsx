@@ -6,8 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
-  Copy, Check, Key, User, Send,
-  ShieldCheck, ShieldAlert, RefreshCw, Zap, Lock, Clock, Crown, RotateCcw
+  Copy, Check, User, Send,
+  ShieldCheck, ShieldAlert, RefreshCw, Zap, Lock, Clock, Crown
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -296,36 +296,6 @@ export default function Profil() {
     toast.success("Скопировано!");
   };
 
-  const [isRegenerating, setIsRegenerating] = useState(false);
-  const handleRegenerateToken = async () => {
-    if (!profile?.apiToken) return;
-    const confirmed = window.confirm(
-      "Будет создан новый токен. Старый перестанет работать — нужно будет заново подтвердить аккаунт через бота командой /token. Продолжить?"
-    );
-    if (!confirmed) return;
-    setIsRegenerating(true);
-    try {
-      const res = await fetch("/api/users/regenerate-token", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ apiToken: profile.apiToken }),
-      });
-      if (!res.ok) { toast.error("Не удалось обновить токен"); return; }
-      const data = await res.json();
-      const updated: Profile = {
-        telegramUsername: data.telegramUsername,
-        apiToken: data.apiToken,
-        telegramUsernameVerified: data.telegramUsernameVerified ?? false,
-      };
-      setProfile(updated);
-      localStorage.setItem("crm_profile", JSON.stringify(updated));
-      toast.success("Токен обновлён! Подтвердите аккаунт в боте командой /token.");
-    } catch {
-      toast.error("Ошибка сети");
-    } finally {
-      setIsRegenerating(false);
-    }
-  };
 
   const isVerified = profile?.telegramUsernameVerified ?? false;
 
@@ -613,49 +583,9 @@ export default function Profil() {
         </CardContent>
       </Card>
 
-      {/* Token Card */}
+      {/* Client link card */}
       {profile && (
         <>
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Key className="w-5 h-5" />
-                API-токен
-              </CardTitle>
-              <CardDescription>
-                Ваш уникальный токен для доступа к API.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center gap-2 rounded-lg border bg-muted/30 p-3 font-mono text-sm break-all">
-                <span className="flex-1 text-xs">{profile.apiToken}</span>
-                <Button variant="ghost" size="icon" className="shrink-0" onClick={() => handleCopy(profile.apiToken)}>
-                  {copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
-                </Button>
-              </div>
-
-              <div className="rounded-lg border border-orange-500/20 bg-orange-500/5 p-4 space-y-2">
-                <p className="text-sm font-medium text-orange-500 flex items-center gap-2">
-                  <RotateCcw className="w-4 h-4" />
-                  Сгенерировать новый токен
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  Если токен скомпрометирован или вы хотите сбросить доступ — создайте новый. Старый станет недействительным, потребуется повторная верификация через бота.
-                </p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="border-orange-500/40 text-orange-500 hover:bg-orange-500/10"
-                  onClick={handleRegenerateToken}
-                  disabled={isRegenerating}
-                >
-                  <RotateCcw className={`w-4 h-4 mr-2 ${isRegenerating ? "animate-spin" : ""}`} />
-                  {isRegenerating ? "Обновляем..." : "Обновить токен"}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-
           {isVerified && (
             <Card className="border-primary/30">
               <CardHeader>
