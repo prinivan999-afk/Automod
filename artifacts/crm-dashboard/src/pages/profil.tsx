@@ -87,7 +87,20 @@ export default function Profil() {
     if (!token) { toast.error("Введите токен"); return; }
     try {
       const res = await fetch(`/api/users/profile?apiToken=${encodeURIComponent(token)}`);
-      if (!res.ok) { toast.error("Токен не найден. Проверьте правильность токена."); return; }
+      if (!res.ok) {
+        // Check if current saved token still works — if so, just close recovery
+        if (profile?.apiToken) {
+          const currentRes = await fetch(`/api/users/profile?apiToken=${encodeURIComponent(profile.apiToken)}`);
+          if (currentRes.ok) {
+            setTokenMismatch(false);
+            setLoggedInRecoveryToken("");
+            toast.info("Ваш текущий токен работает — восстановление не нужно.");
+            return;
+          }
+        }
+        toast.error("Токен не найден. Отправьте /mytoken боту AutoMind и вставьте токен из ответа.");
+        return;
+      }
       const data = await res.json();
       const recovered: Profile = {
         telegramUsername: data.telegramUsername,
@@ -433,11 +446,19 @@ export default function Profil() {
 
               {tokenMismatch && (
                 <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-4 space-y-3 mt-2">
-                  <div>
-                    <p className="text-sm font-semibold text-red-400 mb-1">⚠️ Токен устарел</p>
-                    <p className="text-xs text-muted-foreground">
-                      Отправьте боту <code className="bg-muted px-1 rounded">/mytoken</code> из Telegram и вставьте полученный токен:
-                    </p>
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-semibold text-red-400 mb-1">⚠️ Токен устарел</p>
+                      <p className="text-xs text-muted-foreground">
+                        Отправьте боту <code className="bg-muted px-1 rounded">/mytoken</code> из Telegram и вставьте полученный токен:
+                      </p>
+                    </div>
+                    <button
+                      className="text-xs text-muted-foreground hover:text-foreground underline shrink-0"
+                      onClick={() => { setTokenMismatch(false); setLoggedInRecoveryToken(""); }}
+                    >
+                      Закрыть
+                    </button>
                   </div>
                   <div className="flex gap-2">
                     <Input
