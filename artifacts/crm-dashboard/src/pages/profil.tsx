@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
-  MessageCircle, Copy, Check, Key, User, Send,
+  Copy, Check, Key, User, Send,
   ShieldCheck, ShieldAlert, RefreshCw, Zap, Lock, Clock, Crown, RotateCcw
 } from "lucide-react";
 import { toast } from "sonner";
@@ -620,10 +620,10 @@ export default function Profil() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Key className="w-5 h-5" />
-                API-токен и верификация
+                API-токен
               </CardTitle>
               <CardDescription>
-                Отправьте токен боту командой <code className="bg-muted px-1 rounded text-xs">/token</code> — подтвердит ваш username и включит уведомления.
+                Ваш уникальный токен для доступа к API.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -631,25 +631,6 @@ export default function Profil() {
                 <span className="flex-1 text-xs">{profile.apiToken}</span>
                 <Button variant="ghost" size="icon" className="shrink-0" onClick={() => handleCopy(profile.apiToken)}>
                   {copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
-                </Button>
-              </div>
-
-              <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 space-y-2">
-                <p className="text-sm font-medium flex items-center gap-2">
-                  <MessageCircle className="w-4 h-4 text-blue-400" />
-                  Как верифицировать username:
-                </p>
-                <ol className="text-sm text-muted-foreground space-y-1.5 list-decimal list-inside">
-                  <li>Откройте бота в Telegram</li>
-                  <li>Отправьте: <code className="bg-muted px-1 rounded text-xs">/token {profile.apiToken.slice(0, 8)}...</code></li>
-                  <li>Бот подтвердит ваш @username и включит уведомления о заявках</li>
-                </ol>
-                <div className="rounded-md border border-blue-500/20 bg-blue-500/5 p-2.5 text-xs text-blue-600 dark:text-blue-400 mt-1">
-                  🔐 Верификация гарантирует, что никто не сможет зарегистрироваться под вашим @username
-                </div>
-                <Button className="w-full mt-2" onClick={() => handleCopy(`/token ${profile.apiToken}`)} variant="outline">
-                  <Copy className="w-4 h-4 mr-2" />
-                  Скопировать команду для бота
                 </Button>
               </div>
 
