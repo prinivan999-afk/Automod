@@ -464,6 +464,18 @@ async function sendLeadToSeller(
   // Extract phone number from details for separate display
   const phoneMatch = lead.details?.match(/(\+?\d[\d\s\-()]{7,})/);
   const phone = phoneMatch?.[1]?.trim();
+  // Strip phone-related lines/fragments from details so it doesn't duplicate
+  let detailsClean: string | null = lead.details ?? null;
+  if (detailsClean) {
+    detailsClean = detailsClean
+      .split(/\r?\n/)
+      .map((line) => line.replace(/(?:тел(?:\.|ефон)?\s*:?\s*)?\+?\d[\d\s\-()]{7,}/gi, "").trim())
+      .map((line) => line.replace(/^[•\-–—,;:.\s]+|[•\-–—,;:.\s]+$/g, "").trim())
+      .filter((line) => line.length > 0)
+      .join("\n")
+      .trim();
+    if (!detailsClean) detailsClean = null;
+  }
   const msg = [
     `🆕 <b>Заявка из Telegram</b>`,
     ``,
@@ -473,7 +485,7 @@ async function sendLeadToSeller(
     lead.quantity ? `📊 Количество: ${escapeHtml(lead.quantity)}` : null,
     lead.deadline ? `📅 Дата/Срок: ${escapeHtml(lead.deadline)}` : null,
     lead.price ? `💰 Цена: ${escapeHtml(lead.price)}` : null,
-    lead.details ? `📝 Детали: ${escapeHtml(lead.details)}` : null,
+    detailsClean ? `📝 Детали: ${escapeHtml(detailsClean)}` : null,
     ``,
     `Статус: ${statusLabel}`,
   ]
