@@ -8,7 +8,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MessageCircle, Search, Filter, Inbox } from "lucide-react";
@@ -32,22 +31,28 @@ export default function ZayavkiList() {
     lead.service.toLowerCase().includes(search.toLowerCase())
   );
 
-  const getStatusColor = (status: string) => {
+  const getStatusBadge = (status: string) => {
     switch (status) {
-      case "hot": return "bg-destructive text-destructive-foreground";
-      case "warm": return "bg-amber-500 text-amber-950";
-      case "cold": return "bg-muted text-muted-foreground";
-      default: return "bg-muted text-muted-foreground";
+      case "hot":
+        return { label: "Горячая заявка", className: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" };
+      case "warm":
+        return { label: "Тёплая заявка", className: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" };
+      case "cold":
+        return { label: "Холодная заявка", className: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" };
+      default:
+        return { label: "Заявка", className: "bg-muted text-muted-foreground" };
     }
   };
 
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case "hot": return "Горячий";
-      case "warm": return "Тёплый";
-      case "cold": return "Холодный";
-      default: return "Неизвестно";
-    }
+  const extractPhone = (details?: string | null): string | null => {
+    if (!details) return null;
+    const m = details.match(/(\+?\d[\d\s\-()]{7,})/);
+    return m?.[1]?.trim() ?? null;
+  };
+
+  const getInitial = (name: string) => {
+    const clean = name.replace(/^@/, "").trim();
+    return clean.charAt(0).toUpperCase() || "?";
   };
 
   return (
@@ -98,48 +103,65 @@ export default function ZayavkiList() {
                   ))}
                 </div>
               ) : filteredLeads && filteredLeads.length > 0 ? (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Клиент</TableHead>
-                      <TableHead>Услуга/Товар</TableHead>
-                      <TableHead>Дата</TableHead>
-                      <TableHead>Статус</TableHead>
-                      <TableHead className="text-right">Действие</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredLeads.map((lead) => (
-                      <TableRow key={lead.id}>
-                        <TableCell className="font-medium">
-                          <div className="flex items-center gap-2">
-                            <MessageCircle className="w-4 h-4 text-blue-400" />
-                            {lead.clientName}
-                            {lead.isPriority && (
-                              <Badge variant="outline" className="border-primary text-primary h-5 px-1.5 text-[10px]">
-                                VIP
-                              </Badge>
-                            )}
+                <div className="p-4 sm:p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {filteredLeads.map((lead) => {
+                    const statusBadge = getStatusBadge(lead.status);
+                    const phone = extractPhone(lead.details);
+                    const rows = [
+                      { emoji: "📦", label: "Услуга", value: lead.service },
+                      lead.quantity ? { emoji: "📊", label: "Объём", value: lead.quantity } : null,
+                      lead.price ? { emoji: "💰", label: "Сумма", value: lead.price } : null,
+                      lead.deadline ? { emoji: "📅", label: "Дата", value: lead.deadline } : null,
+                      phone ? { emoji: "📞", label: "Телефон", value: phone } : null,
+                    ].filter(Boolean) as { emoji: string; label: string; value: string }[];
+
+                    return (
+                      <div
+                        key={lead.id}
+                        className="bg-card border border-border rounded-2xl p-5 saas-card space-y-4 flex flex-col"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-primary/15 flex items-center justify-center text-primary font-bold text-sm shrink-0">
+                            {getInitial(lead.clientName)}
                           </div>
-                        </TableCell>
-                        <TableCell>{lead.service}</TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {format(new Date(lead.createdAt), "d MMM, HH:mm", { locale: ru })}
-                        </TableCell>
-                        <TableCell>
-                          <Badge className={getStatusColor(lead.status)}>
-                            {getStatusText(lead.status)}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button asChild variant="ghost" size="sm">
-                            <Link href={`/zayavki/${lead.id}`}>Открыть</Link>
+                          <div className="min-w-0 flex-1">
+                            <p className="font-semibold truncate flex items-center gap-2">
+                              {lead.clientName}
+                              {lead.isPriority && (
+                                <Badge variant="outline" className="border-primary text-primary h-5 px-1.5 text-[10px]">
+                                  VIP
+                                </Badge>
+                              )}
+                            </p>
+                            <span className={`inline-block text-xs font-medium px-2 py-0.5 rounded-full mt-0.5 ${statusBadge.className}`}>
+                              {statusBadge.label}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="space-y-2 text-sm flex-1">
+                          {rows.map(({ emoji, label, value }) => (
+                            <div key={label} className="flex items-start justify-between gap-3">
+                              <span className="text-muted-foreground flex items-center gap-2 shrink-0">
+                                <span>{emoji}</span>{label}
+                              </span>
+                              <span className="font-medium text-right break-words">{value}</span>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="pt-3 border-t border-border flex items-center justify-between gap-2">
+                          <span className="text-xs text-muted-foreground">
+                            {format(new Date(lead.createdAt), "d MMM, HH:mm", { locale: ru })}
+                          </span>
+                          <Button asChild size="sm" className="rounded-xl font-semibold">
+                            <Link href={`/zayavki/${lead.id}`}>Открыть →</Link>
                           </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               ) : (
                 <div className="p-12 text-center text-muted-foreground flex flex-col items-center justify-center">
                   <MessageCircle className="w-12 h-12 mb-4 text-muted" />
