@@ -55,6 +55,26 @@ export default function Profil() {
   const [verifyDeepLink, setVerifyDeepLink] = useState<string | null>(null);
   const [isPollingVerification, setIsPollingVerification] = useState(false);
 
+  // Auto-sync profile from server on mount so verification status reflects reality
+  useEffect(() => {
+    if (!profile?.apiToken) return;
+    (async () => {
+      try {
+        const { data } = await refetchProfile();
+        if (data) {
+          const updated: Profile = {
+            telegramUsername: data.telegramUsername,
+            apiToken: data.apiToken,
+            telegramUsernameVerified: (data as Profile).telegramUsernameVerified ?? false,
+          };
+          setProfile(updated);
+          localStorage.setItem("crm_profile", JSON.stringify(updated));
+        }
+      } catch { /* ignore */ }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleRefreshStatus = async () => {
     if (!profile?.apiToken) return;
     setIsRefreshing(true);
