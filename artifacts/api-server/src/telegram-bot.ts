@@ -20,8 +20,11 @@ import {
 import { sql } from "drizzle-orm";
 import { ai } from "@workspace/integrations-gemini-ai";
 import { setBotUsername } from "./routes/users";
+import { getAvailableSlots, getEffectiveDay, generateSlotsForDay } from "./lib/schedule-engine";
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+
+let activeBot: TelegramBot | null = null;
 
 type BotMessage = { role: "user" | "model"; parts: Array<{ text: string }> };
 
@@ -188,7 +191,13 @@ function generateTimeSlots(start: string, end: string, slotMinutes: number): str
   return slots;
 }
 
-async function getNextAvailableSlots(dateStr: string, nearTime?: string, count = 2): Promise<string[]> {
+async function getNextAvailableSlots(
+  userId: number | null | undefined,
+  dateStr: string,
+  nearTime?: string,
+  count = 2
+): Promise<string[]> {
+  if (!userId) return [];
   let dateObj: Date;
   try {
     dateObj = new Date(dateStr);
@@ -197,28 +206,16 @@ async function getNextAvailableSlots(dateStr: string, nearTime?: string, count =
     return [];
   }
 
-  const dayOfWeek = dateObj.getUTCDay();
-  const [daySchedule] = await db
-    .select()
-    .from(workScheduleTable)
-    .where(eq(workScheduleTable.dayOfWeek, dayOfWeek));
-
-  if (!daySchedule || !daySchedule.isWorking) return [];
-
   const isoDate = dateObj.toISOString().split("T")[0];
-  const allSlots = generateTimeSlots(daySchedule.startTime, daySchedule.endTime, daySchedule.slotDuration);
+  const { slots: freeSlots, isWorking } = await getAvailableSlots(userId, isoDate);
+  if (!isWorking) return [];
 
-  const booked = await db
-    .select()
-    .from(appointmentsTable)
-    .where(and(eq(appointmentsTable.date, isoDate), eq(appointmentsTable.status, "booked")));
-
-  const bookedTimes = new Set(booked.map((b) => b.timeSlot));
-  const freeSlots = allSlots.filter((s) => !bookedTimes.has(s));
+  // For pivot logic we also need the full slot list (including blocked) to walk neighbours
+  const day = await getEffectiveDay(userId, isoDate);
+  const allSlots = generateSlotsForDay(day);
 
   if (!nearTime) return freeSlots.slice(0, count);
 
-  // Find the pivot index in allSlots (including booked ones)
   const pivotIdx = allSlots.indexOf(nearTime);
   if (pivotIdx === -1) return freeSlots.slice(0, count);
 
@@ -258,7 +255,7 @@ async function isSlotBooked(date: string, timeSlot: string): Promise<boolean> {
   return existing.length > 0;
 }
 
-async function getAvailableSlotsText(dateStr: string): Promise<string> {
+async function getAvailableSlotsText(userId: number | null | undefined, dateStr: string): Promise<string> {
   let dateObj: Date;
   try {
     dateObj = new Date(dateStr);
@@ -270,25 +267,18 @@ async function getAvailableSlotsText(dateStr: string): Promise<string> {
   const dayOfWeek = dateObj.getDay();
   const DAY_NAMES = ["воскресенье", "понедельник", "вторник", "среда", "четверг", "пятница", "суббота"];
 
-  const [daySchedule] = await db
-    .select()
-    .from(workScheduleTable)
-    .where(eq(workScheduleTable.dayOfWeek, dayOfWeek));
-
-  if (!daySchedule || !daySchedule.isWorking) {
-    return `К сожалению, ${DAY_NAMES[dayOfWeek]} — выходной день. Пожалуйста, выберите другую дату.`;
+  if (!userId) {
+    return "Расписание пока не настроено. Свяжитесь с менеджером.";
   }
 
   const isoDate = dateObj.toISOString().split("T")[0];
-  const allSlots = generateTimeSlots(daySchedule.startTime, daySchedule.endTime, daySchedule.slotDuration);
+  const { slots: freeSlots, isWorking, note } = await getAvailableSlots(userId, isoDate);
 
-  const booked = await db
-    .select()
-    .from(appointmentsTable)
-    .where(and(eq(appointmentsTable.date, isoDate), eq(appointmentsTable.status, "booked")));
-
-  const bookedTimes = new Set(booked.map((b) => b.timeSlot));
-  const freeSlots = allSlots.filter((s) => !bookedTimes.has(s));
+  if (!isWorking) {
+    return note
+      ? `На ${dateStr} — ${note}. Пожалуйста, выберите другую дату.`
+      : `К сожалению, ${DAY_NAMES[dayOfWeek]} — выходной день. Пожалуйста, выберите другую дату.`;
+  }
 
   if (freeSlots.length === 0) {
     return `На ${dateStr} все слоты заняты. Пожалуйста, выберите другую дату.`;
@@ -533,14 +523,7 @@ export async function markCompletedAppointments() {
       const [h, m] = appt.timeSlot.split(":").map(Number);
       const apptStart = new Date(`${appt.date}T${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:00Z`);
 
-      // Get slot duration from schedule for that day of week
-      const dayOfWeek = apptStart.getUTCDay();
-      const [schedule] = await db
-        .select()
-        .from(workScheduleTable)
-        .where(eq(workScheduleTable.dayOfWeek, dayOfWeek));
-
-      const slotMinutes = schedule?.slotDuration ?? 60;
+      const slotMinutes = appt.durationMinutes ?? 30;
       const apptEnd = new Date(apptStart.getTime() + slotMinutes * 60 * 1000);
 
       if (now >= apptEnd) {
@@ -556,11 +539,79 @@ export async function markCompletedAppointments() {
   }
 }
 
+async function sendDueReminders() {
+  if (!activeBot) return;
+  try {
+    const booked = await db
+      .select()
+      .from(appointmentsTable)
+      .where(eq(appointmentsTable.status, "booked"));
+
+    if (booked.length === 0) return;
+
+    const now = Date.now();
+
+    for (const appt of booked) {
+      if (!appt.clientChatId) continue;
+
+      const [h, m] = appt.timeSlot.split(":").map(Number);
+      const apptStart = new Date(
+        `${appt.date}T${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:00Z`
+      ).getTime();
+      const minsUntil = Math.round((apptStart - now) / 60000);
+
+      const dateLabel = new Date(appt.date + "T00:00:00").toLocaleDateString("ru-RU", {
+        day: "numeric",
+        month: "long",
+      });
+      const serviceLabel = appt.service ? ` на «${appt.service}»` : "";
+
+      // 24h reminder window: 22h..26h before
+      if (!appt.reminderDaySent && minsUntil >= 22 * 60 && minsUntil <= 26 * 60) {
+        try {
+          await activeBot.sendMessage(
+            appt.clientChatId,
+            `⏰ Напоминание: завтра, ${dateLabel} в ${appt.timeSlot}, у вас запись${serviceLabel}.`
+          );
+          await db
+            .update(appointmentsTable)
+            .set({ reminderDaySent: true })
+            .where(eq(appointmentsTable.id, appt.id));
+        } catch (e) {
+          console.error(`[Reminders] Failed day reminder for ${appt.id}:`, e);
+        }
+      }
+
+      // 1h reminder window: 50..70 mins before
+      if (!appt.reminderHourSent && minsUntil >= 50 && minsUntil <= 70) {
+        try {
+          await activeBot.sendMessage(
+            appt.clientChatId,
+            `⏰ Через час у вас запись${serviceLabel} (${appt.timeSlot}). Ждём вас!`
+          );
+          await db
+            .update(appointmentsTable)
+            .set({ reminderHourSent: true })
+            .where(eq(appointmentsTable.id, appt.id));
+        } catch (e) {
+          console.error(`[Reminders] Failed hour reminder for ${appt.id}:`, e);
+        }
+      }
+    }
+  } catch (err) {
+    console.error("[Reminders] Error:", err);
+  }
+}
+
 export function startAppointmentCleanupJob() {
   // Run immediately on startup, then every 5 minutes
   markCompletedAppointments();
-  setInterval(markCompletedAppointments, 5 * 60 * 1000);
-  console.log("[Cleanup] Appointment cleanup job started (every 5 min)");
+  sendDueReminders();
+  setInterval(() => {
+    markCompletedAppointments();
+    sendDueReminders();
+  }, 5 * 60 * 1000);
+  console.log("[Cleanup] Appointment cleanup + reminders job started (every 5 min)");
 }
 
 export async function startTelegramBot() {
@@ -587,6 +638,8 @@ export async function startTelegramBot() {
       },
     } as any,
   });
+
+  activeBot = bot;
 
   // Catch polling errors (e.g. 409 Conflict, network errors)
   bot.on("polling_error", (err) => {
@@ -1491,7 +1544,7 @@ export async function startTelegramBot() {
       // Check if slot is already taken
       const slotTaken = await isSlotBooked(dateToBook, timeSlot);
       if (slotTaken) {
-        const freeSlots = await getNextAvailableSlots(dateToBook, timeSlot);
+        const freeSlots = await getNextAvailableSlots(seller?.id, dateToBook, timeSlot);
         const dateObjRedir = new Date(dateToBook);
         const formattedRedir = dateObjRedir.toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
         const redirectText = freeSlots.length > 0
@@ -1599,7 +1652,7 @@ export async function startTelegramBot() {
         // Check if slot is already taken
         const slotTaken2 = await isSlotBooked(detectedDate, timeSlot);
         if (slotTaken2) {
-          const freeSlots2 = await getNextAvailableSlots(detectedDate, timeSlot);
+          const freeSlots2 = await getNextAvailableSlots(seller?.id, detectedDate, timeSlot);
           const dateObjRedir2 = new Date(detectedDate);
           const formattedRedir2 = dateObjRedir2.toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
           const redirectText2 = freeSlots2.length > 0
@@ -1650,7 +1703,7 @@ export async function startTelegramBot() {
         return;
       }
 
-      const slotsText = await getAvailableSlotsText(detectedDate);
+      const slotsText = await getAvailableSlotsText(conv.sellerId, detectedDate);
 
       messages.push({ role: "model", parts: [{ text: slotsText }] });
       await db
@@ -1749,7 +1802,7 @@ export async function startTelegramBot() {
           if (dlDate) {
             const slotTakenForLead = await isSlotBooked(dlDate, dlTimeMatch[1]);
             if (slotTakenForLead) {
-              const freeAlts = await getNextAvailableSlots(dlDate, dlTimeMatch[1]);
+              const freeAlts = await getNextAvailableSlots(seller?.id, dlDate, dlTimeMatch[1]);
               const dateObjAlt = new Date(dlDate);
               const formattedAlt = dateObjAlt.toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
               const conflictMsg = freeAlts.length > 0

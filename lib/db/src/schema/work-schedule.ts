@@ -12,6 +12,9 @@ export const workScheduleTable = pgTable("work_schedule", {
   startTime: text("start_time").notNull().default("09:00"),
   endTime: text("end_time").notNull().default("18:00"),
   slotDuration: integer("slot_duration").notNull().default(30),
+  breakStart: text("break_start"),
+  breakEnd: text("break_end"),
+  bufferMinutes: integer("buffer_minutes").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
