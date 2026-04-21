@@ -185,6 +185,20 @@ router.post("/tariff/settings", async (req, res): Promise<void> => {
   res.json(formatTariff(saved));
 });
 
+router.delete("/tariff/settings", async (req, res): Promise<void> => {
+  const userId = await getUserIdFromRequest(req);
+  if (!userId) {
+    res.status(401).json({ error: "Требуется авторизация." });
+    return;
+  }
+
+  await db
+    .delete(tariffSettingsTable)
+    .where(eq(tariffSettingsTable.userId, userId));
+
+  res.json({ ok: true });
+});
+
 function formatTariff(t: typeof tariffSettingsTable.$inferSelect) {
   return {
     ...t,

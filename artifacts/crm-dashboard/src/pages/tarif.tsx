@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Sparkles, Save, Check, Loader2, Lock } from "lucide-react";
+import { Sparkles, Save, Check, Loader2, Lock, X } from "lucide-react";
 import { toast } from "sonner";
 import { AnalyzeTariffResponse } from "@workspace/api-client-react/src/generated/api.schemas";
 import { useLocation } from "wouter";
@@ -257,7 +257,33 @@ export default function Tarif() {
           )}
 
           {currentSettings && !analyzedResult && (
-            <Card>
+            <Card className="relative">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="absolute top-3 right-3 h-7 w-7 rounded-full text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                onClick={async () => {
+                  if (!confirm("Удалить текущий активный тариф? Бот перестанет использовать эти настройки.")) return;
+                  try {
+                    const raw = localStorage.getItem("crm_profile");
+                    const profile = raw ? JSON.parse(raw) : null;
+                    const apiToken = profile?.apiToken;
+                    if (!apiToken) { toast.error("Войдите в профиль"); return; }
+                    const res = await fetch("/api/tariff/settings", {
+                      method: "DELETE",
+                      headers: { Authorization: `Bearer ${apiToken}` },
+                    });
+                    if (!res.ok) { toast.error("Не удалось удалить тариф"); return; }
+                    toast.success("Тариф удалён");
+                    queryClient.invalidateQueries({ queryKey: getGetTariffSettingsQueryKey() });
+                  } catch {
+                    toast.error("Ошибка сети");
+                  }
+                }}
+                title="Удалить тариф"
+              >
+                <X className="w-4 h-4" />
+              </Button>
               <CardHeader>
                 <CardTitle>Текущий активный тариф</CardTitle>
                 <CardDescription>Бот использует эти настройки в данный момент</CardDescription>
