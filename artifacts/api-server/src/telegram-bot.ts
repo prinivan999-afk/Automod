@@ -434,10 +434,14 @@ async function sendLeadToSeller(
   if (!seller.telegramChatId) return null;
 
   const statusLabel = lead.status === "hot" ? "Горячий 🔥" : lead.status === "warm" ? "Тёплый" : "Холодный";
+  // Extract phone number from details for separate display
+  const phoneMatch = lead.details?.match(/(\+?\d[\d\s\-()]{7,})/);
+  const phone = phoneMatch?.[1]?.trim();
   const msg = [
     `🆕 <b>Заявка из Telegram</b>`,
     ``,
     `👤 Клиент: ${escapeHtml(lead.clientName)}`,
+    phone ? `📞 Телефон: ${escapeHtml(phone)}` : null,
     `📦 Услуга: ${escapeHtml(lead.service)}`,
     lead.quantity ? `📊 Количество: ${escapeHtml(lead.quantity)}` : null,
     lead.deadline ? `📅 Дата/Срок: ${escapeHtml(lead.deadline)}` : null,
@@ -1232,11 +1236,15 @@ export async function startTelegramBot() {
       : null;
 
     if (existingLead) {
-      await db.update(leadsTable).set({
-        details: existingLead.details ? `${existingLead.details}\n${phoneDetails}` : phoneDetails,
+      const newDetails = existingLead.details && existingLead.details.includes(phone)
+        ? existingLead.details
+        : (existingLead.details ? `${existingLead.details}\n${phoneDetails}` : phoneDetails);
+      const [updatedLead] = await db.update(leadsTable).set({
+        details: newDetails,
         status: "hot",
         isPriority: true,
-      }).where(eq(leadsTable.id, existingLead.id));
+      }).where(eq(leadsTable.id, existingLead.id)).returning();
+      existingLead = updatedLead;
 
       await db.insert(leadChatMessagesTable).values({
         leadId: existingLead.id,
@@ -1281,8 +1289,8 @@ export async function startTelegramBot() {
       .where(eq(botConversationsTable.userChatId, chatId));
 
     if (seller) {
-      // Always send a NEW message on phone confirmation so seller gets notified
-      const msgId = await sendLeadToSeller(bot, seller, existingLead!, null);
+      // Edit existing seller message if we already sent one; else send new
+      const msgId = await sendLeadToSeller(bot, seller, existingLead!, conv.sellerMsgId);
       if (msgId) {
         await upsertConversation(chatId, { sellerMsgId: msgId });
       }
@@ -1392,7 +1400,8 @@ export async function startTelegramBot() {
         leadId = newLead.id;
         await upsertConversation(chatId, { leadId: newLead.id });
 
-        if (seller) {
+        // Notify seller only if phone was already shared (sellerMsgId exists) — edit existing message
+        if (seller && conv.sellerMsgId) {
           const msgId = await sendLeadToSeller(bot, seller, newLead, conv.sellerMsgId);
           if (msgId) await upsertConversation(chatId, { sellerMsgId: msgId });
         }
@@ -1499,7 +1508,8 @@ export async function startTelegramBot() {
           }).returning();
           leadId = newLead.id;
           await upsertConversation(chatId, { leadId: newLead.id });
-          if (seller) {
+          // Notify seller only if phone was already shared (sellerMsgId exists) — edit existing message
+          if (seller && conv.sellerMsgId) {
             const msgId = await sendLeadToSeller(bot, seller, newLead, conv.sellerMsgId);
             if (msgId) await upsertConversation(chatId, { sellerMsgId: msgId });
           }
@@ -1791,11 +1801,11 @@ export async function startTelegramBot() {
           }
         }
 
-        // Notify seller: always for new leads, and also when phone is provided for existing leads
-        const shouldNotifySeller = seller && (!conv.leadId || phonePattern);
+        // Notify seller ONLY when phone is provided (initial notification),
+        // or edit existing notification when data changes after phone was already shared
+        const shouldNotifySeller = seller && (phonePattern || conv.sellerMsgId);
         if (shouldNotifySeller) {
-          // Send new message on phone confirmation; edit for intermediate updates
-          const msgId = await sendLeadToSeller(bot, seller, existingLead!, phonePattern ? null : conv.sellerMsgId);
+          const msgId = await sendLeadToSeller(bot, seller, existingLead!, conv.sellerMsgId);
           if (msgId) {
             await upsertConversation(chatId, { sellerMsgId: msgId });
           }
