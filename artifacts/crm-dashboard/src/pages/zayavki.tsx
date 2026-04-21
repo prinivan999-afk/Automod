@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { MessageCircle, Search, Filter, Inbox, Check } from "lucide-react";
+import { MessageCircle, Search, Filter, Inbox, X } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -167,9 +167,41 @@ export default function ZayavkiList() {
                     return (
                       <div
                         key={lead.id}
-                        className="bg-card border border-border rounded-2xl p-5 saas-card space-y-4 flex flex-col"
+                        className="relative bg-card border border-border rounded-2xl p-5 saas-card space-y-4 flex flex-col"
                       >
-                        <div className="flex items-center gap-3">
+                        {lead.status !== "completed" && (
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <button
+                                type="button"
+                                aria-label="Закрыть заявку"
+                                className="absolute top-3 right-3 w-7 h-7 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition"
+                                disabled={updateStatus.isPending}
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Закрыть заявку?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Заявка от <span className="font-semibold">{lead.clientName}</span> будет помечена как завершённая и перенесена в раздел «Завершённые».
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Отмена</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() =>
+                                    updateStatus.mutate({ id: lead.id, data: { status: "completed" as any } })
+                                  }
+                                >
+                                  Закрыть заявку
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        )}
+                        <div className="flex items-center gap-3 pr-8">
                           <div className="w-10 h-10 rounded-full bg-primary/15 flex items-center justify-center text-primary font-bold text-sm shrink-0">
                             {getInitial(lead.clientName)}
                           </div>
@@ -192,48 +224,13 @@ export default function ZayavkiList() {
                           ))}
                         </div>
 
-                        <div className="pt-3 border-t border-border flex flex-wrap items-center justify-between gap-2">
-                          <span className="text-xs text-muted-foreground shrink-0">
+                        <div className="pt-3 border-t border-border flex items-center justify-between gap-3">
+                          <span className="text-xs text-muted-foreground">
                             {format(new Date(lead.createdAt), "d MMM, HH:mm", { locale: ru })}
                           </span>
-                          <div className="flex items-center gap-2 flex-1 justify-end min-w-0">
-                            {lead.status !== "completed" && (
-                              <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="rounded-xl font-semibold border-emerald-500/40 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 px-3 whitespace-nowrap"
-                                    disabled={updateStatus.isPending}
-                                  >
-                                    <Check className="w-4 h-4 mr-1" />
-                                    Закрыть
-                                  </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                  <AlertDialogHeader>
-                                    <AlertDialogTitle>Закрыть заявку?</AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                      Заявка от <span className="font-semibold">{lead.clientName}</span> будет помечена как завершённая и перенесена в раздел «Завершённые».
-                                    </AlertDialogDescription>
-                                  </AlertDialogHeader>
-                                  <AlertDialogFooter>
-                                    <AlertDialogCancel>Отмена</AlertDialogCancel>
-                                    <AlertDialogAction
-                                      onClick={() =>
-                                        updateStatus.mutate({ id: lead.id, data: { status: "completed" as any } })
-                                      }
-                                    >
-                                      Закрыть заявку
-                                    </AlertDialogAction>
-                                  </AlertDialogFooter>
-                                </AlertDialogContent>
-                              </AlertDialog>
-                            )}
-                            <Button asChild size="sm" className="rounded-xl font-semibold">
-                              <Link href={`/zayavki/${lead.id}`}>Открыть →</Link>
-                            </Button>
-                          </div>
+                          <Button asChild size="sm" className="rounded-xl font-semibold">
+                            <Link href={`/zayavki/${lead.id}`}>Открыть →</Link>
+                          </Button>
                         </div>
                       </div>
                     );

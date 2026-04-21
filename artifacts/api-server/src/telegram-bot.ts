@@ -1754,8 +1754,11 @@ export async function startTelegramBot() {
       }
 
       {
-        let existingLead = conv.leadId
-          ? (await db.select().from(leadsTable).where(eq(leadsTable.id, conv.leadId)).limit(1))[0]
+        // Re-fetch conv to avoid race condition where lead was just created in another handler path
+        const freshConv = await getConversation(chatId);
+        const effectiveLeadId = freshConv?.leadId ?? conv.leadId;
+        let existingLead = effectiveLeadId
+          ? (await db.select().from(leadsTable).where(eq(leadsTable.id, effectiveLeadId)).limit(1))[0]
           : null;
 
         if (existingLead) {
