@@ -819,6 +819,9 @@ export async function startTelegramBot() {
     // Deep link: /start v_CODE — account verification
     if (deepLinkParam?.startsWith("v_")) {
       const code = deepLinkParam.slice(2).toUpperCase();
+      const realUsernameForCheck = msg.from?.username?.toLowerCase();
+      const realTelegramUserIdForCheck = String(msg.from!.id);
+
       const [userByCode] = await db
         .select()
         .from(usersTable)
@@ -826,8 +829,28 @@ export async function startTelegramBot() {
         .limit(1);
 
       if (!userByCode) {
+        // Code already used — check if this Telegram user is already verified
+        const [alreadyVerified] = await db
+          .select()
+          .from(usersTable)
+          .where(
+            and(
+              eq(usersTable.telegramUserId, realTelegramUserIdForCheck),
+              eq(usersTable.telegramUsernameVerified, true)
+            )
+          )
+          .limit(1);
+
+        if (alreadyVerified) {
+          await bot.sendMessage(chatId,
+            `✅ Ваш аккаунт *@${alreadyVerified.telegramUsername}* уже верифицирован.\n\nЗаявки будут приходить сюда.`,
+            { parse_mode: "Markdown" }
+          );
+          return;
+        }
+
         await bot.sendMessage(chatId,
-          `❌ Код верификации не найден или уже использован.\n\nПопробуйте запросить новый код на сайте.`
+          `❌ Эта ссылка верификации уже использована или устарела.\n\nОткройте сайт и нажмите «Подтвердить через Telegram» ещё раз — будет создана новая ссылка.`
         );
         return;
       }
