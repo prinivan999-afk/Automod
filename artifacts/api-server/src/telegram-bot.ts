@@ -20,7 +20,24 @@ import {
 import { sql } from "drizzle-orm";
 import { ai } from "@workspace/integrations-gemini-ai";
 import { setBotUsername } from "./routes/users";
-import { getAvailableSlots, getEffectiveDay, generateSlotsForDay } from "./lib/schedule-engine";
+import { getAvailableSlots, getEffectiveDay, generateSlotsForDay, validateBooking } from "./lib/schedule-engine";
+
+async function tryInsertAppointment(values: typeof appointmentsTable.$inferInsert): Promise<boolean> {
+  try {
+    await db.insert(appointmentsTable).values(values);
+    return true;
+  } catch (err: any) {
+    // Unique violation on (userId, date, timeSlot) where status='booked' — race lost
+    if (err?.code === "23505") return false;
+    throw err;
+  }
+}
+
+async function getDurationForBooking(userId: number | null | undefined, date: string): Promise<number> {
+  if (!userId) return 30;
+  const day = await getEffectiveDay(userId, date);
+  return day.slotDuration;
+}
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
@@ -1541,15 +1558,17 @@ export async function startTelegramBot() {
         }).where(eq(leadsTable.id, leadId));
       }
 
-      // Check if slot is already taken
-      const slotTaken = await isSlotBooked(dateToBook, timeSlot);
-      if (slotTaken) {
+      // Strict availability check (working hours, lunch, holidays, buffer, no overlap)
+      const validation = seller?.id
+        ? await validateBooking(seller.id, dateToBook, timeSlot, await getDurationForBooking(seller.id, dateToBook))
+        : { ok: false as const, reason: "расписание не настроено" };
+      if (!validation.ok) {
         const freeSlots = await getNextAvailableSlots(seller?.id, dateToBook, timeSlot);
         const dateObjRedir = new Date(dateToBook);
         const formattedRedir = dateObjRedir.toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
         const redirectText = freeSlots.length > 0
-          ? `К сожалению, время ${timeSlot} на ${formattedRedir} уже занято другим клиентом.\n\nВот ближайшие свободные слоты:\n${freeSlots.map((s) => `🕐 ${s}`).join("\n")}\n\nВыберите другое удобное время!`
-          : `К сожалению, время ${timeSlot} на ${formattedRedir} уже занято, и других свободных слотов на этот день нет. Пожалуйста, выберите другую дату.`;
+          ? `К сожалению, ${validation.reason} (${timeSlot}, ${formattedRedir}).\n\nВот ближайшие свободные слоты:\n${freeSlots.map((s) => `🕐 ${s}`).join("\n")}\n\nВыберите другое удобное время!`
+          : `К сожалению, ${validation.reason} (${timeSlot}, ${formattedRedir}), и других свободных слотов на этот день нет. Пожалуйста, выберите другую дату.`;
         messages.push({ role: "model", parts: [{ text: redirectText }] });
         await db.update(botConversationsTable)
           .set({ messages: JSON.stringify(messages) })
@@ -1558,16 +1577,29 @@ export async function startTelegramBot() {
         return;
       }
 
-      // Create appointment
-      await db.insert(appointmentsTable).values({
+      // Create appointment (atomic — unique index prevents race)
+      const inserted = await tryInsertAppointment({
         userId: seller?.id ?? null,
         leadId,
         date: dateToBook,
         timeSlot,
+        durationMinutes: await getDurationForBooking(seller?.id, dateToBook),
         clientName,
         clientChatId: chatId,
         status: "booked",
       });
+      if (!inserted) {
+        const freeSlots = await getNextAvailableSlots(seller?.id, dateToBook, timeSlot);
+        const raceText = freeSlots.length > 0
+          ? `Это время только что заняли. Свободно:\n${freeSlots.map((s) => `🕐 ${s}`).join("\n")}`
+          : `Это время только что заняли. Пожалуйста, выберите другую дату.`;
+        messages.push({ role: "model", parts: [{ text: raceText }] });
+        await db.update(botConversationsTable)
+          .set({ messages: JSON.stringify(messages) })
+          .where(eq(botConversationsTable.userChatId, chatId));
+        await bot.sendMessage(chatId, raceText);
+        return;
+      }
 
       // Clear pending date
       await upsertConversation(chatId, { pendingDate: null });
@@ -1649,15 +1681,17 @@ export async function startTelegramBot() {
           }).where(eq(leadsTable.id, leadId));
         }
 
-        // Check if slot is already taken
-        const slotTaken2 = await isSlotBooked(detectedDate, timeSlot);
-        if (slotTaken2) {
+        // Strict availability check (working hours, lunch, holidays, buffer, no overlap)
+        const validation2 = seller?.id
+          ? await validateBooking(seller.id, detectedDate, timeSlot, await getDurationForBooking(seller.id, detectedDate))
+          : { ok: false as const, reason: "расписание не настроено" };
+        if (!validation2.ok) {
           const freeSlots2 = await getNextAvailableSlots(seller?.id, detectedDate, timeSlot);
           const dateObjRedir2 = new Date(detectedDate);
           const formattedRedir2 = dateObjRedir2.toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
           const redirectText2 = freeSlots2.length > 0
-            ? `К сожалению, время ${timeSlot} на ${formattedRedir2} уже занято другим клиентом.\n\nВот ближайшие свободные слоты:\n${freeSlots2.map((s) => `🕐 ${s}`).join("\n")}\n\nВыберите другое удобное время!`
-            : `К сожалению, время ${timeSlot} на ${formattedRedir2} уже занято, и других свободных слотов на этот день нет. Пожалуйста, выберите другую дату.`;
+            ? `К сожалению, ${validation2.reason} (${timeSlot}, ${formattedRedir2}).\n\nВот ближайшие свободные слоты:\n${freeSlots2.map((s) => `🕐 ${s}`).join("\n")}\n\nВыберите другое удобное время!`
+            : `К сожалению, ${validation2.reason} (${timeSlot}, ${formattedRedir2}), и других свободных слотов на этот день нет. Пожалуйста, выберите другую дату.`;
           messages.push({ role: "model", parts: [{ text: redirectText2 }] });
           await db.update(botConversationsTable)
             .set({ messages: JSON.stringify(messages), pendingDate: null })
@@ -1666,15 +1700,25 @@ export async function startTelegramBot() {
           return;
         }
 
-        await db.insert(appointmentsTable).values({
+        const inserted2 = await tryInsertAppointment({
           userId: seller?.id ?? null,
           leadId,
           date: detectedDate,
           timeSlot,
+          durationMinutes: await getDurationForBooking(seller?.id, detectedDate),
           clientName,
           clientChatId: chatId,
           status: "booked",
         });
+        if (!inserted2) {
+          const raceText2 = `Это время только что заняли. Пожалуйста, выберите другое удобное время.`;
+          messages.push({ role: "model", parts: [{ text: raceText2 }] });
+          await db.update(botConversationsTable)
+            .set({ messages: JSON.stringify(messages), pendingDate: null })
+            .where(eq(botConversationsTable.userChatId, chatId));
+          await bot.sendMessage(chatId, raceText2);
+          return;
+        }
 
         await upsertConversation(chatId, { pendingDate: null });
         const dateObj = new Date(detectedDate);
@@ -1800,8 +1844,10 @@ export async function startTelegramBot() {
         if (dlTimeMatch) {
           const dlDate = await parseDateFromText(effectiveLeadData.deadline);
           if (dlDate) {
-            const slotTakenForLead = await isSlotBooked(dlDate, dlTimeMatch[1]);
-            if (slotTakenForLead) {
+            const dlValidation = seller?.id
+              ? await validateBooking(seller.id, dlDate, dlTimeMatch[1], await getDurationForBooking(seller.id, dlDate))
+              : { ok: false as const, reason: "расписание" };
+            if (!dlValidation.ok) {
               const freeAlts = await getNextAvailableSlots(seller?.id, dlDate, dlTimeMatch[1]);
               const dateObjAlt = new Date(dlDate);
               const formattedAlt = dateObjAlt.toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
@@ -1910,23 +1956,30 @@ export async function startTelegramBot() {
             const dateFromText = await parseDateFromText(text);
             const finalDate = conv.pendingDate ?? dateFromDeadline ?? dateFromText ?? null;
 
-            if (finalDate) {
-              // Only insert if slot not already booked
-              const slotAlreadyTaken = await isSlotBooked(finalDate, finalTimeSlot);
-              if (!slotAlreadyTaken) {
-                await db.insert(appointmentsTable).values({
-                  userId: seller?.id ?? null,
+            if (finalDate && seller?.id) {
+              const finalValidation = await validateBooking(
+                seller.id,
+                finalDate,
+                finalTimeSlot,
+                await getDurationForBooking(seller.id, finalDate)
+              );
+              if (finalValidation.ok) {
+                const ok = await tryInsertAppointment({
+                  userId: seller.id,
                   leadId: existingLead.id,
                   date: finalDate,
                   timeSlot: finalTimeSlot,
+                  durationMinutes: await getDurationForBooking(seller.id, finalDate),
                   clientName,
                   clientChatId: chatId,
                   status: "booked",
                 });
-                // Update lead deadline to proper format
-                await db.update(leadsTable).set({
-                  deadline: `${finalDate} ${finalTimeSlot}`,
-                }).where(eq(leadsTable.id, existingLead.id));
+                if (ok) {
+                  // Update lead deadline to proper format
+                  await db.update(leadsTable).set({
+                    deadline: `${finalDate} ${finalTimeSlot}`,
+                  }).where(eq(leadsTable.id, existingLead.id));
+                }
               }
             }
           }

@@ -122,6 +122,45 @@ export function generateSlotsForDay(
   return slots;
 }
 
+export async function validateBooking(
+  userId: number,
+  date: string,
+  timeSlot: string,
+  durationMinutes?: number
+): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const day = await getEffectiveDay(userId, date);
+  if (!day.isWorking) {
+    return {
+      ok: false,
+      reason: day.note ? `этот день нерабочий (${day.note})` : "это выходной день",
+    };
+  }
+  const dur = durationMinutes ?? day.slotDuration;
+
+  if (day.breakStart && day.breakEnd) {
+    const t = timeSlot;
+    const tEndH = ((parseInt(timeSlot.slice(0, 2)) * 60 + parseInt(timeSlot.slice(3)) + dur) / 60);
+    const endHH = `${String(Math.floor(tEndH)).padStart(2, "0")}:${String(Math.round((tEndH % 1) * 60)).padStart(2, "0")}`;
+    if (t < day.breakEnd && endHH > day.breakStart) {
+      return {
+        ok: false,
+        reason: `это время попадает на перерыв (${day.breakStart}–${day.breakEnd})`,
+      };
+    }
+  }
+
+  const allSlots = generateSlotsForDay(day, dur);
+  if (!allSlots.includes(timeSlot)) {
+    return { ok: false, reason: "это время вне рабочих часов" };
+  }
+
+  const { slots: free } = await getAvailableSlots(userId, date, dur);
+  if (!free.includes(timeSlot)) {
+    return { ok: false, reason: "это время уже занято" };
+  }
+  return { ok: true };
+}
+
 export async function getAvailableSlots(
   userId: number,
   date: string,
