@@ -952,12 +952,25 @@ export async function startTelegramBot() {
         .limit(1);
 
       if (sellerAccount) {
+        // Auto-verify: Telegram has confirmed username ownership for us
+        if (!sellerAccount.telegramUsernameVerified) {
+          await db.update(usersTable).set({
+            telegramChatId: chatId,
+            telegramUserId: String(msg.from!.id),
+            telegramUsernameVerified: true,
+            verificationCode: null,
+          }).where(eq(usersTable.id, sellerAccount.id));
+        } else if (sellerAccount.telegramChatId !== chatId) {
+          await db.update(usersTable).set({
+            telegramChatId: chatId,
+            telegramUserId: String(msg.from!.id),
+          }).where(eq(usersTable.id, sellerAccount.id));
+        }
         // This person is a registered seller — show seller panel
-        const status = sellerAccount.telegramUsernameVerified ? "✅ Верифицирован" : "⚠️ Не верифицирован";
         await bot.sendMessage(
           chatId,
           `👋 С возвращением, *@${senderUsername}*!\n\n` +
-          `Статус аккаунта: ${status}\n\n` +
+          `Статус аккаунта: ✅ Верифицирован\n\n` +
           `Доступные команды:\n` +
           `• /schedule — ваш график работы\n\n` +
           `Для входа в личный кабинет — откройте сайт AutoMind.`,
