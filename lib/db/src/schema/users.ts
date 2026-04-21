@@ -13,6 +13,11 @@ export const usersTable = pgTable("users", {
   plan: text("plan", { enum: ["basic", "business"] }).notNull().default("basic"),
   trialStartedAt: timestamp("trial_started_at", { withTimezone: true }),
   subscriptionExpiresAt: timestamp("subscription_expires_at", { withTimezone: true }),
+  googleRefreshToken: text("google_refresh_token"),
+  googleAccessToken: text("google_access_token"),
+  googleTokenExpiry: timestamp("google_token_expiry", { withTimezone: true }),
+  googleCalendarId: text("google_calendar_id").default("primary"),
+  googleEmail: text("google_email"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

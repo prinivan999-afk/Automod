@@ -2,6 +2,11 @@ import { Router, type IRouter } from "express";
 import { eq, and } from "drizzle-orm";
 import { db, workScheduleTable, appointmentsTable } from "@workspace/db";
 import { getUserIdFromRequest } from "./auth-helper";
+import {
+  createCalendarEvent,
+  deleteCalendarEvent,
+  getBusySlots,
+} from "../lib/google-calendar";
 
 const router: IRouter = Router();
 
@@ -145,9 +150,29 @@ router.get("/schedule/available-slots", async (req, res): Promise<void> => {
     ));
 
   const bookedTimes = new Set(booked.map((b) => b.timeSlot));
-  const freeSlots = allSlots.filter((s) => !bookedTimes.has(s));
 
-  res.json({ date, slots: freeSlots, bookedSlots: [...bookedTimes] });
+  // Также исключаем занятые слоты из Google Calendar (если подключён)
+  const busy = await getBusySlots(resolvedUserId, date);
+  const slotMin = daySchedule.slotDuration;
+  const externalBusy = new Set<string>();
+  for (const slot of allSlots) {
+    if (bookedTimes.has(slot)) continue;
+    const [h, m] = slot.split(":").map(Number);
+    const slotStart = new Date(`${date}T${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:00+03:00`);
+    const slotEnd = new Date(slotStart.getTime() + slotMin * 60_000);
+    if (busy.some((b) => b.start < slotEnd && b.end > slotStart)) {
+      externalBusy.add(slot);
+    }
+  }
+
+  const freeSlots = allSlots.filter((s) => !bookedTimes.has(s) && !externalBusy.has(s));
+
+  res.json({
+    date,
+    slots: freeSlots,
+    bookedSlots: [...bookedTimes],
+    googleBusy: [...externalBusy],
+  });
 });
 
 router.get("/appointments", async (req, res): Promise<void> => {
@@ -176,15 +201,43 @@ router.post("/appointments", async (req, res): Promise<void> => {
     return;
   }
 
-  const { date, timeSlot, clientName, clientChatId, leadId } = req.body;
+  const { date, timeSlot, clientName, clientChatId, leadId, service, phone } = req.body;
   if (!date || !timeSlot || !clientName) {
     res.status(400).json({ error: "Укажите дату, время и имя клиента" });
     return;
   }
 
+  // Длительность слота из расписания
+  const dayOfWeek = new Date(date).getDay();
+  const [daySchedule] = await db
+    .select()
+    .from(workScheduleTable)
+    .where(and(eq(workScheduleTable.dayOfWeek, dayOfWeek), eq(workScheduleTable.userId, userId)));
+  const durationMin = daySchedule?.slotDuration ?? 30;
+
+  // Создаём событие в Google Calendar (если подключён)
+  const eventId = await createCalendarEvent(userId, {
+    date,
+    timeSlot,
+    durationMin,
+    summary: service ? `${service} — ${clientName}` : `Запись: ${clientName}`,
+    description: [phone && `Телефон: ${phone}`, `AutoMind CRM`].filter(Boolean).join("\n"),
+  });
+
   const [appointment] = await db
     .insert(appointmentsTable)
-    .values({ userId, date, timeSlot, clientName, clientChatId, leadId, status: "booked" })
+    .values({
+      userId,
+      date,
+      timeSlot,
+      clientName,
+      clientChatId,
+      leadId,
+      service,
+      phone,
+      googleEventId: eventId,
+      status: "booked",
+    })
     .returning();
 
   res.status(201).json({ ...appointment, createdAt: appointment.createdAt.toISOString() });
@@ -201,6 +254,16 @@ router.delete("/appointments/:id", async (req, res): Promise<void> => {
   if (isNaN(id)) {
     res.status(400).json({ error: "Неверный ID" });
     return;
+  }
+
+  const [existing] = await db
+    .select()
+    .from(appointmentsTable)
+    .where(and(eq(appointmentsTable.id, id), eq(appointmentsTable.userId, userId)))
+    .limit(1);
+
+  if (existing?.googleEventId) {
+    await deleteCalendarEvent(userId, existing.googleEventId);
   }
 
   await db
