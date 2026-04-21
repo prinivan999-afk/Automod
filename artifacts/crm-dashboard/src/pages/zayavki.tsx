@@ -192,18 +192,18 @@ export default function ZayavkiList() {
                           ))}
                         </div>
 
-                        <div className="pt-3 border-t border-border flex items-center justify-between gap-2">
-                          <span className="text-xs text-muted-foreground">
+                        <div className="pt-3 border-t border-border flex flex-wrap items-center justify-between gap-2">
+                          <span className="text-xs text-muted-foreground shrink-0">
                             {format(new Date(lead.createdAt), "d MMM, HH:mm", { locale: ru })}
                           </span>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-1 justify-end min-w-0">
                             {lead.status !== "completed" && (
                               <AlertDialog>
                                 <AlertDialogTrigger asChild>
                                   <Button
                                     size="sm"
                                     variant="outline"
-                                    className="rounded-xl font-semibold border-emerald-500/40 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
+                                    className="rounded-xl font-semibold border-emerald-500/40 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 px-3 whitespace-nowrap"
                                     disabled={updateStatus.isPending}
                                   >
                                     <Check className="w-4 h-4 mr-1" />
