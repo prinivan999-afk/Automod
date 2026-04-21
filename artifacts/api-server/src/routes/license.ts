@@ -8,6 +8,8 @@ const router: IRouter = Router();
 const TRIAL_DAYS = 3;
 const ADMIN_SECRET = process.env.ADMIN_SECRET ?? "automind-admin-2024";
 
+const FOREVER_ADMIN_USERNAMES = new Set(["ohakol"]);
+
 function calcLicenseStatus(user: typeof usersTable.$inferSelect): {
   status: "trial" | "active" | "expired" | "none";
   plan: "basic" | "business";
@@ -17,6 +19,18 @@ function calcLicenseStatus(user: typeof usersTable.$inferSelect): {
 } {
   const now = new Date();
   const plan = (user.plan ?? "basic") as "basic" | "business";
+
+  // Lifetime Business access for special admin accounts
+  if (user.telegramUsername && FOREVER_ADMIN_USERNAMES.has(user.telegramUsername.toLowerCase())) {
+    const farFuture = new Date(now.getTime() + 365 * 100 * 24 * 60 * 60 * 1000); // 100 years
+    return {
+      status: "active",
+      plan: "business",
+      daysLeft: 36500,
+      expiresAt: farFuture.toISOString(),
+      trialStartedAt: null,
+    };
+  }
 
   if (user.subscriptionExpiresAt && user.subscriptionExpiresAt > now) {
     const msLeft = user.subscriptionExpiresAt.getTime() - now.getTime();
