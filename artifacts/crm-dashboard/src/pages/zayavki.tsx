@@ -2,15 +2,28 @@ import { Link } from "wouter";
 import {
   useListLeadChatMessages,
   useListLeads,
+  useUpdateLeadStatus,
 } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { MessageCircle, Search, Filter, Inbox } from "lucide-react";
+import { MessageCircle, Search, Filter, Inbox, Check } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { ru } from "date-fns/locale";
 import React from "react";
@@ -18,18 +31,33 @@ import React from "react";
 export default function ZayavkiList() {
   const [statusFilter, setStatusFilter] = React.useState<string>("all");
   const [search, setSearch] = React.useState("");
+  const [view, setView] = React.useState<"active" | "completed">("active");
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
 
-  const queryParams: any = {};
-  if (statusFilter !== "all") queryParams.status = statusFilter;
-  queryParams.platform = "Telegram";
-
-  const { data: leads, isLoading } = useListLeads({ platform: "Telegram", ...(statusFilter !== "all" ? { status: statusFilter as any } : {}) });
+  const { data: leads, isLoading } = useListLeads({ platform: "Telegram" });
   const { data: chatMessages, isLoading: chatLoading } = useListLeadChatMessages();
 
-  const filteredLeads = leads?.filter(lead =>
-    lead.clientName.toLowerCase().includes(search.toLowerCase()) ||
-    lead.service.toLowerCase().includes(search.toLowerCase())
-  );
+  const updateStatus = useUpdateLeadStatus({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && typeof q.queryKey[0] === "string" && (q.queryKey[0] as string).includes("/api/leads") });
+        queryClient.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && typeof q.queryKey[0] === "string" && (q.queryKey[0] as string).includes("/api/analytics") });
+        toast({ title: "Заявка закрыта", description: "Заявка перенесена в раздел «Завершённые»." });
+      },
+      onError: (e: any) => {
+        toast({ title: "Не удалось закрыть заявку", description: e?.message ?? "Попробуйте ещё раз.", variant: "destructive" });
+      },
+    },
+  });
+
+  const filteredLeads = leads
+    ?.filter((lead) => (view === "completed" ? lead.status === "completed" : lead.status !== "completed"))
+    .filter((lead) => view === "completed" || statusFilter === "all" || lead.status === statusFilter)
+    .filter((lead) =>
+      lead.clientName.toLowerCase().includes(search.toLowerCase()) ||
+      lead.service.toLowerCase().includes(search.toLowerCase())
+    );
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -39,6 +67,8 @@ export default function ZayavkiList() {
         return { label: "Тёплая заявка", className: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" };
       case "cold":
         return { label: "Холодная заявка", className: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" };
+      case "completed":
+        return { label: "Завершена", className: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" };
       default:
         return { label: "Заявка", className: "bg-muted text-muted-foreground" };
     }
@@ -70,29 +100,48 @@ export default function ZayavkiList() {
 
         <TabsContent value="leads">
           <Card>
-            <div className="p-4 border-b border-border flex flex-col sm:flex-row gap-4 items-center justify-between">
-              <div className="relative w-full sm:max-w-xs">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Поиск по имени или услуге..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="pl-9"
-                />
+            <div className="p-4 border-b border-border flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
+              <div className="inline-flex rounded-xl bg-muted p-1 gap-1">
+                <button
+                  onClick={() => setView("active")}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${view === "active" ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                  Активные
+                </button>
+                <button
+                  onClick={() => setView("completed")}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${view === "completed" ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                  Завершённые
+                </button>
               </div>
 
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-[160px]">
-                  <Filter className="w-4 h-4 mr-2" />
-                  <SelectValue placeholder="Статус" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Все статусы</SelectItem>
-                  <SelectItem value="hot">Горячие</SelectItem>
-                  <SelectItem value="warm">Тёплые</SelectItem>
-                  <SelectItem value="cold">Холодные</SelectItem>
-                </SelectContent>
-              </Select>
+              <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
+                <div className="relative w-full sm:max-w-xs">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Поиск по имени или услуге..."
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="pl-9"
+                  />
+                </div>
+
+                {view === "active" && (
+                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <SelectTrigger className="w-[160px]">
+                      <Filter className="w-4 h-4 mr-2" />
+                      <SelectValue placeholder="Статус" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Все статусы</SelectItem>
+                      <SelectItem value="hot">Горячие</SelectItem>
+                      <SelectItem value="warm">Тёплые</SelectItem>
+                      <SelectItem value="cold">Холодные</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
             </div>
 
             <CardContent className="p-0">
@@ -147,9 +196,44 @@ export default function ZayavkiList() {
                           <span className="text-xs text-muted-foreground">
                             {format(new Date(lead.createdAt), "d MMM, HH:mm", { locale: ru })}
                           </span>
-                          <Button asChild size="sm" className="rounded-xl font-semibold">
-                            <Link href={`/zayavki/${lead.id}`}>Открыть →</Link>
-                          </Button>
+                          <div className="flex items-center gap-2">
+                            {lead.status !== "completed" && (
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="rounded-xl font-semibold border-emerald-500/40 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
+                                    disabled={updateStatus.isPending}
+                                  >
+                                    <Check className="w-4 h-4 mr-1" />
+                                    Закрыть
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Закрыть заявку?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Заявка от <span className="font-semibold">{lead.clientName}</span> будет помечена как завершённая и перенесена в раздел «Завершённые».
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Отмена</AlertDialogCancel>
+                                    <AlertDialogAction
+                                      onClick={() =>
+                                        updateStatus.mutate({ id: lead.id, data: { status: "completed" as any } })
+                                      }
+                                    >
+                                      Закрыть заявку
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            )}
+                            <Button asChild size="sm" className="rounded-xl font-semibold">
+                              <Link href={`/zayavki/${lead.id}`}>Открыть →</Link>
+                            </Button>
+                          </div>
                         </div>
                       </div>
                     );
@@ -158,8 +242,14 @@ export default function ZayavkiList() {
               ) : (
                 <div className="p-12 text-center text-muted-foreground flex flex-col items-center justify-center">
                   <MessageCircle className="w-12 h-12 mb-4 text-muted" />
-                  <p className="text-lg font-medium">Заявок пока нет</p>
-                  <p className="text-sm">Когда покупатель напишет боту, заявка появится здесь</p>
+                  <p className="text-lg font-medium">
+                    {view === "completed" ? "Завершённых заявок нет" : "Заявок пока нет"}
+                  </p>
+                  <p className="text-sm">
+                    {view === "completed"
+                      ? "После закрытия заявки она появится здесь"
+                      : "Когда покупатель напишет боту, заявка появится здесь"}
+                  </p>
                 </div>
               )}
             </CardContent>

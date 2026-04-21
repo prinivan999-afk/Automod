@@ -12,4 +12,5 @@ export const LeadStatus = {
   hot: "hot",
   warm: "warm",
   cold: "cold",
+  completed: "completed",
 } as const;

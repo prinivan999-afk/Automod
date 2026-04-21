@@ -19,7 +19,7 @@ export const HealthCheckResponse = zod.object({
  * @summary Список всех заявок
  */
 export const ListLeadsQueryParams = zod.object({
-  status: zod.enum(["hot", "warm", "cold"]).optional(),
+  status: zod.enum(["hot", "warm", "cold", "completed"]).optional(),
   platform: zod.enum(["Telegram", "Instagram", "MAX"]).optional(),
   dateFrom: zod.coerce.string().optional(),
   dateTo: zod.coerce.string().optional(),
@@ -35,7 +35,7 @@ export const ListLeadsResponseItem = zod.object({
   deadline: zod.string().nullish(),
   price: zod.string().nullish(),
   comment: zod.string().nullish(),
-  status: zod.enum(["hot", "warm", "cold"]),
+  status: zod.enum(["hot", "warm", "cold", "completed"]),
   recommendation: zod.string().nullish(),
   isPriority: zod.boolean(),
   createdAt: zod.string(),
@@ -55,7 +55,7 @@ export const CreateLeadBody = zod.object({
   deadline: zod.string().nullish(),
   price: zod.string().nullish(),
   comment: zod.string().nullish(),
-  status: zod.enum(["hot", "warm", "cold"]),
+  status: zod.enum(["hot", "warm", "cold", "completed"]),
   recommendation: zod.string().nullish(),
   isPriority: zod.boolean().optional(),
 });
@@ -77,7 +77,7 @@ export const GetLeadResponse = zod.object({
   deadline: zod.string().nullish(),
   price: zod.string().nullish(),
   comment: zod.string().nullish(),
-  status: zod.enum(["hot", "warm", "cold"]),
+  status: zod.enum(["hot", "warm", "cold", "completed"]),
   recommendation: zod.string().nullish(),
   isPriority: zod.boolean(),
   createdAt: zod.string(),
@@ -100,7 +100,7 @@ export const UpdateLeadBody = zod.object({
   deadline: zod.string().nullish(),
   price: zod.string().nullish(),
   comment: zod.string().nullish(),
-  status: zod.enum(["hot", "warm", "cold"]).optional(),
+  status: zod.enum(["hot", "warm", "cold", "completed"]).optional(),
   recommendation: zod.string().nullish(),
   isPriority: zod.boolean().optional(),
 });
@@ -115,7 +115,7 @@ export const UpdateLeadResponse = zod.object({
   deadline: zod.string().nullish(),
   price: zod.string().nullish(),
   comment: zod.string().nullish(),
-  status: zod.enum(["hot", "warm", "cold"]),
+  status: zod.enum(["hot", "warm", "cold", "completed"]),
   recommendation: zod.string().nullish(),
   isPriority: zod.boolean(),
   createdAt: zod.string(),
@@ -137,7 +137,7 @@ export const UpdateLeadStatusParams = zod.object({
 });
 
 export const UpdateLeadStatusBody = zod.object({
-  status: zod.enum(["hot", "warm", "cold"]),
+  status: zod.enum(["hot", "warm", "cold", "completed"]),
 });
 
 export const UpdateLeadStatusResponse = zod.object({
@@ -150,7 +150,7 @@ export const UpdateLeadStatusResponse = zod.object({
   deadline: zod.string().nullish(),
   price: zod.string().nullish(),
   comment: zod.string().nullish(),
-  status: zod.enum(["hot", "warm", "cold"]),
+  status: zod.enum(["hot", "warm", "cold", "completed"]),
   recommendation: zod.string().nullish(),
   isPriority: zod.boolean(),
   createdAt: zod.string(),
@@ -203,7 +203,7 @@ export const GetRecentActivityResponseItem = zod.object({
   deadline: zod.string().nullish(),
   price: zod.string().nullish(),
   comment: zod.string().nullish(),
-  status: zod.enum(["hot", "warm", "cold"]),
+  status: zod.enum(["hot", "warm", "cold", "completed"]),
   recommendation: zod.string().nullish(),
   isPriority: zod.boolean(),
   createdAt: zod.string(),

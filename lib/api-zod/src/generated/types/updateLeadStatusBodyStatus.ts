@@ -13,4 +13,5 @@ export const UpdateLeadStatusBodyStatus = {
   hot: "hot",
   warm: "warm",
   cold: "cold",
+  completed: "completed",
 } as const;

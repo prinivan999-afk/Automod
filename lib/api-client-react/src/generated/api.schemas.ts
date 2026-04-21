@@ -27,6 +27,7 @@ export const LeadStatus = {
   hot: "hot",
   warm: "warm",
   cold: "cold",
+  completed: "completed",
 } as const;
 
 export interface Lead {
@@ -68,6 +69,7 @@ export const CreateLeadBodyStatus = {
   hot: "hot",
   warm: "warm",
   cold: "cold",
+  completed: "completed",
 } as const;
 
 export interface CreateLeadBody {
@@ -106,6 +108,7 @@ export const UpdateLeadBodyStatus = {
   hot: "hot",
   warm: "warm",
   cold: "cold",
+  completed: "completed",
 } as const;
 
 export interface UpdateLeadBody {
@@ -135,6 +138,7 @@ export const UpdateLeadStatusBodyStatus = {
   hot: "hot",
   warm: "warm",
   cold: "cold",
+  completed: "completed",
 } as const;
 
 export interface UpdateLeadStatusBody {
@@ -458,6 +462,7 @@ export const ListLeadsStatus = {
   hot: "hot",
   warm: "warm",
   cold: "cold",
+  completed: "completed",
 } as const;
 
 export type ListLeadsPlatform =
