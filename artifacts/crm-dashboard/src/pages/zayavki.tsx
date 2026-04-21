@@ -125,14 +125,7 @@ export default function ZayavkiList() {
                             {getInitial(lead.clientName)}
                           </div>
                           <div className="min-w-0 flex-1">
-                            <p className="font-semibold truncate flex items-center gap-2">
-                              {lead.clientName}
-                              {lead.isPriority && (
-                                <Badge variant="outline" className="border-primary text-primary h-5 px-1.5 text-[10px]">
-                                  VIP
-                                </Badge>
-                              )}
-                            </p>
+                            <p className="font-semibold truncate">{lead.clientName}</p>
                             <span className={`inline-block text-xs font-medium px-2 py-0.5 rounded-full mt-0.5 ${statusBadge.className}`}>
                               {statusBadge.label}
                             </span>
