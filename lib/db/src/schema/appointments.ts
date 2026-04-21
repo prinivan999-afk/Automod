@@ -16,7 +16,6 @@ export const appointmentsTable = pgTable("appointments", {
   status: text("status").notNull().default("booked"),
   service: text("service"),
   phone: text("phone"),
-  googleEventId: text("google_event_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

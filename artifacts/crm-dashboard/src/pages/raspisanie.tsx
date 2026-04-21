@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Calendar, Clock, Save, Trash2, Users, CheckCircle2, XCircle, ExternalLink } from "lucide-react";
+import { Calendar, Clock, Save, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
 
 const BASE_URL = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -58,62 +58,10 @@ export default function Raspisanie() {
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<"schedule" | "appointments">("schedule");
 
-  const [gcalStatus, setGcalStatus] = useState<{ configured: boolean; connected: boolean; email: string | null } | null>(null);
-  const [gcalLoading, setGcalLoading] = useState(false);
-
   useEffect(() => {
     loadSchedule();
     loadAppointments();
-    loadGcalStatus();
   }, []);
-
-  const loadGcalStatus = async () => {
-    try {
-      const res = await fetch(`${BASE_URL}/api/calendar/google/status`, { headers: getAuthHeaders() });
-      if (res.ok) setGcalStatus(await res.json());
-    } catch (e) {
-      console.error("Failed to load gcal status", e);
-    }
-  };
-
-  const connectGoogle = async () => {
-    setGcalLoading(true);
-    try {
-      const res = await fetch(`${BASE_URL}/api/calendar/google/auth`, { headers: getAuthHeaders() });
-      if (!res.ok) {
-        toast.error("Не удалось получить ссылку авторизации");
-        return;
-      }
-      const { url } = await res.json();
-      const win = window.open(url, "_blank", "width=520,height=640");
-      const interval = setInterval(async () => {
-        if (win?.closed) {
-          clearInterval(interval);
-          await loadGcalStatus();
-          setGcalLoading(false);
-        }
-      }, 1000);
-    } catch {
-      toast.error("Ошибка подключения");
-      setGcalLoading(false);
-    }
-  };
-
-  const disconnectGoogle = async () => {
-    if (!confirm("Отключить Google Calendar? Существующие записи останутся в обоих местах, но новые перестанут синхронизироваться.")) return;
-    try {
-      const res = await fetch(`${BASE_URL}/api/calendar/google/disconnect`, {
-        method: "POST",
-        headers: getAuthHeaders(),
-      });
-      if (res.ok) {
-        toast.success("Google Calendar отключён");
-        await loadGcalStatus();
-      }
-    } catch {
-      toast.error("Ошибка отключения");
-    }
-  };
 
   const loadSchedule = async () => {
     try {
@@ -220,46 +168,6 @@ export default function Raspisanie() {
 
       {activeTab === "schedule" && (
         <div className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Calendar className="w-5 h-5" />
-                Google Calendar
-              </CardTitle>
-              <CardDescription>
-                Двусторонняя синхронизация: новые записи попадают в ваш Google-календарь, а занятые слоты оттуда автоматически блокируются для бота.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {gcalStatus === null ? (
-                <div className="h-10 rounded-lg bg-muted/30 animate-pulse" />
-              ) : !gcalStatus.configured ? (
-                <p className="text-sm text-muted-foreground">
-                  Google OAuth не настроен на сервере. Добавьте <code className="bg-muted px-1 rounded text-xs">GOOGLE_CLIENT_ID</code> и <code className="bg-muted px-1 rounded text-xs">GOOGLE_CLIENT_SECRET</code> в Secrets.
-                </p>
-              ) : gcalStatus.connected ? (
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="flex items-center gap-2 text-sm">
-                    <CheckCircle2 className="w-5 h-5 text-emerald-500" />
-                    <span>Подключено: <b>{gcalStatus.email ?? "Google Calendar"}</b></span>
-                  </div>
-                  <Button variant="outline" size="sm" onClick={disconnectGoogle}>
-                    <XCircle className="w-4 h-4 mr-1.5" />
-                    Отключить
-                  </Button>
-                </div>
-              ) : (
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <p className="text-sm text-muted-foreground">Не подключено</p>
-                  <Button onClick={connectGoogle} disabled={gcalLoading} size="sm">
-                    <ExternalLink className="w-4 h-4 mr-1.5" />
-                    {gcalLoading ? "Ожидание..." : "Подключить Google Calendar"}
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">

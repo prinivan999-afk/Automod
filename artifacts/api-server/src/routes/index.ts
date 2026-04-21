@@ -8,7 +8,6 @@ import scheduleRouter from "./schedule";
 import licenseRouter from "./license";
 import geminiRouter from "./gemini";
 import automodRouter from "./automod";
-import googleCalendarRouter from "./google-calendar";
 
 const router: IRouter = Router();
 
@@ -21,6 +20,5 @@ router.use(scheduleRouter);
 router.use(licenseRouter);
 router.use(geminiRouter);
 router.use(automodRouter);
-router.use(googleCalendarRouter);
 
 export default router;
