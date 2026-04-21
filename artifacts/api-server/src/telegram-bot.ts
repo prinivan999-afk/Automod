@@ -360,6 +360,28 @@ async function parseDateFromText(text: string): Promise<string | null> {
     }
   }
 
+  // Day-of-week names (понедельник, вторник, ..., воскресенье + variants)
+  // Returns the NEAREST upcoming occurrence (today if matches and not past 23:59, else next week)
+  const weekdays: { keys: string[]; dow: number }[] = [
+    { keys: ["воскресен"], dow: 0 },
+    { keys: ["понедельник", "понедельн"], dow: 1 },
+    { keys: ["вторник"], dow: 2 },
+    { keys: ["сред"], dow: 3 },
+    { keys: ["четверг"], dow: 4 },
+    { keys: ["пятниц"], dow: 5 },
+    { keys: ["субботу", "суббот"], dow: 6 },
+  ];
+  for (const { keys, dow } of weekdays) {
+    if (keys.some((k) => lower.includes(k))) {
+      const todayDow = today.getDay();
+      let diff = (dow - todayDow + 7) % 7;
+      if (diff === 0) diff = 7; // "пятница" сказанная в пятницу — это СЛЕДУЮЩАЯ пятница
+      const d = new Date(today);
+      d.setDate(d.getDate() + diff);
+      return d.toISOString().split("T")[0];
+    }
+  }
+
   return null;
 }
 
