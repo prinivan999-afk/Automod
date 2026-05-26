@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useForm } from "react-hook-form";
 import { useLocation } from "wouter";
 import {
   customFetch,
@@ -18,7 +17,6 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
@@ -177,7 +175,7 @@ export default function TelegramBusinessPage() {
           setPlan(data.plan ?? "basic");
         })
         .catch(() => setLicenseStatus("none"));
-      fetch("/api/users/bot-info", {
+      fetch("/api/users/bot-username", {
         headers: { Authorization: `Bearer ${profile.apiToken}` },
       })
         .then((r) => r.json())
@@ -516,7 +514,7 @@ function ChatsTab() {
 
   const handleToggle = (chat: AutomodChat) => {
     toggleExclude.mutate(chat.id, {
-      onSuccess: (updated) =>
+      onSuccess: (updated: AutomodChat) =>
         toast({
           title: updated.isExcluded ? "Бот отключён для этого чата" : "Бот включён для этого чата",
         }),
@@ -583,7 +581,7 @@ function ChatsTab() {
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
             Активные ({active.length})
           </p>
-          {active.map((c) => <ChatRow key={c.id} chat={c} />)}
+          {active.map((c: AutomodChat) => <ChatRow key={c.id} chat={c} />)}
         </div>
       )}
 
@@ -592,7 +590,7 @@ function ChatsTab() {
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
             Исключённые ({excluded.length})
           </p>
-          {excluded.map((c) => <ChatRow key={c.id} chat={c} />)}
+          {excluded.map((c: AutomodChat) => <ChatRow key={c.id} chat={c} />)}
         </div>
       )}
     </div>
@@ -604,22 +602,20 @@ function SettingsTab() {
   const { data: settings, isLoading } = useAutomodSettings();
   const saveSettings = useSaveSettings();
   const { toast } = useToast();
-  const { register, handleSubmit, setValue, watch, reset } =
-    useForm<SaveAutomodSettingsBody>({
-      defaultValues: { aiName: "AutoMind", systemPrompt: "", tone: "professional", isEnabled: true },
-    });
-  const watchTone = watch("tone");
-  const watchEnabled = watch("isEnabled");
+
+  const [aiName, setAiName] = useState("AutoMind");
+  const [systemPrompt, setSystemPrompt] = useState("");
+  const [tone, setTone] = useState<AutomodSettingsTone>("professional");
+  const [isEnabled, setIsEnabled] = useState(true);
 
   useEffect(() => {
-    if (settings)
-      reset({
-        aiName: settings.aiName,
-        systemPrompt: settings.systemPrompt,
-        tone: settings.tone,
-        isEnabled: settings.isEnabled,
-      });
-  }, [settings, reset]);
+    if (settings) {
+      setAiName(settings.aiName);
+      setSystemPrompt(settings.systemPrompt);
+      setTone(settings.tone as AutomodSettingsTone);
+      setIsEnabled(settings.isEnabled);
+    }
+  }, [settings]);
 
   if (isLoading)
     return (
@@ -628,15 +624,22 @@ function SettingsTab() {
       </div>
     );
 
-  const onSubmit = (data: SaveAutomodSettingsBody) => {
-    saveSettings.mutate(data, {
-      onSuccess: () => toast({ title: "Настройки сохранены" }),
-      onError: () => toast({ title: "Ошибка сохранения", variant: "destructive" }),
-    });
+  const handleSave = () => {
+    if (!aiName.trim()) {
+      toast({ title: "Укажите имя ассистента", variant: "destructive" });
+      return;
+    }
+    saveSettings.mutate(
+      { aiName: aiName.trim(), systemPrompt, tone, isEnabled },
+      {
+        onSuccess: () => toast({ title: "Настройки сохранены" }),
+        onError: (e) => toast({ title: "Ошибка сохранения", description: String(e), variant: "destructive" }),
+      }
+    );
   };
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-5 max-w-xl">
+    <div className="space-y-5 max-w-xl">
       {/* Global toggle */}
       <Card>
         <CardContent className="pt-5 flex items-center justify-between gap-4">
@@ -644,10 +647,7 @@ function SettingsTab() {
             <p className="font-semibold">Автоответы включены</p>
             <p className="text-sm text-muted-foreground">Бот будет отвечать на входящие сообщения</p>
           </div>
-          <Switch
-            checked={watchEnabled}
-            onCheckedChange={(v) => setValue("isEnabled", v, { shouldDirty: true })}
-          />
+          <Switch checked={isEnabled} onCheckedChange={setIsEnabled} />
         </CardContent>
       </Card>
 
@@ -656,8 +656,9 @@ function SettingsTab() {
         <Label htmlFor="aiName" className="font-semibold">Имя ассистента</Label>
         <Input
           id="aiName"
+          value={aiName}
+          onChange={(e) => setAiName(e.target.value)}
           placeholder="Например: Алекс, Менеджер, AutoMind"
-          {...register("aiName", { required: true })}
         />
         <p className="text-xs text-muted-foreground">
           Так будет представляться ИИ при общении с клиентами.
@@ -667,32 +668,34 @@ function SettingsTab() {
       {/* Tone */}
       <div className="space-y-2">
         <Label className="font-semibold">Тон общения</Label>
-        <RadioGroup
-          value={watchTone}
-          onValueChange={(v) => setValue("tone", v as AutomodSettingsTone, { shouldDirty: true })}
-          className="grid grid-cols-1 gap-2"
-        >
+        <div className="grid grid-cols-1 gap-2">
           {[
             { value: "friendly", label: "Дружелюбный", desc: "Неформально, тёплый стиль" },
             { value: "professional", label: "Профессиональный", desc: "Вежливо, по делу" },
             { value: "formal", label: "Официальный", desc: "Строго деловой" },
-          ].map((tone) => (
-            <Label
-              key={tone.value}
-              className={`flex items-center gap-3 border p-3.5 rounded-xl cursor-pointer transition-colors ${
-                watchTone === tone.value
+          ].map((t) => (
+            <button
+              key={t.value}
+              type="button"
+              onClick={() => setTone(t.value as AutomodSettingsTone)}
+              className={`flex items-center gap-3 border p-3.5 rounded-xl text-left transition-colors w-full ${
+                tone === t.value
                   ? "border-primary bg-primary/5"
-                  : "hover:bg-muted/50"
+                  : "hover:bg-muted/50 border-border"
               }`}
             >
-              <RadioGroupItem value={tone.value} />
-              <div>
-                <p className="font-medium text-sm">{tone.label}</p>
-                <p className="text-xs text-muted-foreground">{tone.desc}</p>
+              <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                tone === t.value ? "border-primary" : "border-muted-foreground"
+              }`}>
+                {tone === t.value && <div className="w-2 h-2 rounded-full bg-primary" />}
               </div>
-            </Label>
+              <div>
+                <p className="font-medium text-sm">{t.label}</p>
+                <p className="text-xs text-muted-foreground">{t.desc}</p>
+              </div>
+            </button>
           ))}
-        </RadioGroup>
+        </div>
       </div>
 
       {/* System prompt */}
@@ -700,19 +703,20 @@ function SettingsTab() {
         <Label htmlFor="systemPrompt" className="font-semibold">Инструкции для ИИ</Label>
         <Textarea
           id="systemPrompt"
+          value={systemPrompt}
+          onChange={(e) => setSystemPrompt(e.target.value)}
           placeholder="Расскажите о вашем бизнесе, услугах, ценах и правилах общения. Чем больше контекста — тем точнее ответы бота..."
           className="min-h-[160px] resize-none"
-          {...register("systemPrompt")}
         />
         <p className="text-xs text-muted-foreground">
           Дайте ИИ контекст: кто вы, что продаёте, как отвечать на частые вопросы.
         </p>
       </div>
 
-      <Button type="submit" disabled={saveSettings.isPending} className="w-full">
+      <Button onClick={handleSave} disabled={saveSettings.isPending} className="w-full">
         {saveSettings.isPending ? "Сохранение..." : "Сохранить настройки"}
       </Button>
-    </form>
+    </div>
   );
 }
 
@@ -751,7 +755,7 @@ function ActivityTab() {
       <p className="text-sm text-muted-foreground">
         Последние {Math.min(activity.length, 20)} диалогов
       </p>
-      {activity.slice(0, 20).map((msg) => (
+      {activity.slice(0, 20).map((msg: AutomodMessage) => (
         <Card key={msg.id}>
           <CardContent className="pt-4 space-y-3">
             <div className="flex justify-between items-center border-b pb-2">
