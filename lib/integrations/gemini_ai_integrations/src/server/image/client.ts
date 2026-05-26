@@ -14,7 +14,7 @@ export const ai = new GoogleGenAI({
  */
 export async function generateImage(prompt: string): Promise<string> {
   const response = await ai.models.generateContent({
-    model: "gemini-2.5-flash-image",
+    model: "antigravity/gemini-3.1-flash-image-preview",
     contents: [{ role: "user", parts: [{ text: prompt }] }],
     config: {
       responseModalities: [Modality.TEXT, Modality.IMAGE],

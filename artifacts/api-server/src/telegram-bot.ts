@@ -106,7 +106,7 @@ async function generateGreeting(botPrompt: string, priceList: string | null): Pr
   const priceListIntro = priceList ? `\n\nПрайс-лист товаров/услуг:\n${priceList}` : "";
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "ag/gemini-2.5-flash",
       contents: [
         {
           role: "user",
@@ -441,7 +441,7 @@ ${conversationText}
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "ag/gemini-2.5-flash",
       contents: [{ role: "user", parts: [{ text: extractPrompt }] }],
       config: { maxOutputTokens: 8192 },
     });
@@ -844,7 +844,7 @@ export async function startTelegramBot() {
 
     try {
       const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
+        model: "ag/gemini-2.5-flash",
         contents: [
           {
             role: "user",
@@ -1254,7 +1254,7 @@ export async function startTelegramBot() {
       if (priceList) {
         try {
           const response = await ai.models.generateContent({
-            model: "gemini-3-flash-preview",
+            model: "ag/gemini-2.5-flash",
             contents: [{ role: "user", parts: [{ text: `${botPrompt}\n\nПрайс-лист:\n${priceList}\n\nКлиент нажал "Каталог". Покажи список доступных товаров/услуг с ценами. Используй ТОЛЬКО обычный текст без звёздочек, подчёркиваний, скобок и других символов форматирования. Коротко и понятно.` }] }],
             config: { maxOutputTokens: 8192 },
           });
@@ -1786,7 +1786,7 @@ export async function startTelegramBot() {
     ];
 
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "ag/gemini-2.5-flash",
       contents,
       config: { maxOutputTokens: 8192 },
     });
