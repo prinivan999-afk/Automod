@@ -228,7 +228,7 @@ export default function TelegramBusinessPage() {
   return (
     <div className="space-y-6 max-w-3xl">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Telegram Business</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Business</h1>
         <p className="text-muted-foreground">
           Бот отвечает на сообщения от вашего имени в личных чатах Telegram
         </p>
@@ -421,21 +421,27 @@ function SetupGuide({ botUsername }: { botUsername: string | null }) {
   const steps = [
     {
       n: 1,
+      title: "Включите Business Mode в BotFather",
+      desc: "Откройте @BotFather → /mybots → выберите вашего бота → Bot Settings → Business Mode → Enable. Без этого шага бот не сможет принимать сообщения через Business-аккаунт.",
+      highlight: true,
+    },
+    {
+      n: 2,
       title: "Откройте Telegram → Настройки",
       desc: "Перейдите в настройки своего аккаунта (должен быть Telegram Business или Premium).",
     },
     {
-      n: 2,
+      n: 3,
       title: "Telegram Business → Чат-боты",
       desc: "Найдите раздел «Telegram Business» и нажмите «Чат-боты» → «Добавить чат-бот».",
     },
     {
-      n: 3,
-      title: botUsername ? `Введите @${botUsername}` : "Введите username бота",
+      n: 4,
+      title: botUsername ? `Найдите и выберите @${botUsername}` : "Введите username бота",
       desc: "Найдите бота в поиске и выберите его. Настройте: Все личные чаты или только выбранные.",
     },
     {
-      n: 4,
+      n: 5,
       title: "Готово — аккаунт появится выше",
       desc: "После подключения аккаунт автоматически появится в списке. Бот начнёт отвечать на ваши входящие сообщения.",
     },
