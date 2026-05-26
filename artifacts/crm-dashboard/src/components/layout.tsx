@@ -16,7 +16,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     { href: "/raspisanie", label: "Расписание", icon: CalendarDays },
     { href: "/tarif", label: "Тариф", icon: FileText },
     { href: "/analitika", label: "Аналитика", icon: Activity },
-    { href: "/telegram-business", label: "Telegram Business", icon: Bot },
+    { href: "/telegram-business", label: "Business", icon: Bot },
     { href: "/profil", label: "Профиль", icon: UserCircle },
   ];
 
