@@ -1456,13 +1456,23 @@ export async function startTelegramBot() {
     const text = msg.text;
 
     if (!userId || !text) return;
-    if (text.startsWith("/")) return;
 
     let conv = await getConversation(chatId);
 
+    // Block commands only when NOT in waiting_seller — in that state
+    // the user might type /username as a shortcut for the seller lookup.
+    if (text.startsWith("/") && conv?.status !== "waiting_seller" && conv != null) return;
+
     if (!conv || conv.status === "waiting_seller") {
-      const usernameMatch = text.match(/@(\w+)/);
-      if (!usernameMatch) {
+      // Accept @username, /username, or plain username (word-only)
+      const rawText = text.trim();
+      const extracted =
+        rawText.match(/^@(\w+)$/)?.[1] ??          // @ohakol
+        rawText.match(/^\/(\w+)$/)?.[1] ??          // /ohakol (typed as command)
+        rawText.match(/@(\w+)/)?.[1] ??             // embedded @ohakol in sentence
+        (/^\w+$/.test(rawText) ? rawText : null);   // plain: ohakol
+
+      if (!extracted) {
         await bot.sendMessage(
           chatId,
           `Чтобы начать, укажите *@username* продавца.\nНапример: *@misha_flowers*`,
@@ -1471,11 +1481,11 @@ export async function startTelegramBot() {
         return;
       }
 
-      const seller = await getSellerByUsername(usernameMatch[1]);
+      const seller = await getSellerByUsername(extracted);
       if (!seller) {
         await bot.sendMessage(
           chatId,
-          `❌ Продавец *@${usernameMatch[1]}* не найден. Проверьте правильность username.`,
+          `❌ Продавец *@${extracted}* не найден. Проверьте правильность username и попробуйте ещё раз.`,
           { parse_mode: "Markdown" }
         );
         return;
