@@ -427,7 +427,7 @@ function SetupGuide({ botUsername }: { botUsername: string | null }) {
     {
       n: 2,
       title: "Нажмите «Автоматизация чатов»",
-      desc: "Этот пункт есть у аккаунтов с Telegram Business или Premium. Откроется окно подключения бота.",
+      desc: "Этот пункт есть у всех пользователей Telegram. Откроется окно подключения бота.",
     },
     {
       n: 3,
