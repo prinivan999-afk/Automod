@@ -421,18 +421,18 @@ function SetupGuide({ botUsername }: { botUsername: string | null }) {
   const steps = [
     {
       n: 1,
-      title: "Откройте Telegram → Настройки",
-      desc: "Перейдите в настройки своего аккаунта (должен быть Telegram Business или Premium).",
+      title: "Откройте Telegram → Мой профиль",
+      desc: "Нажмите на своё имя или аватар, чтобы открыть страницу профиля.",
     },
     {
       n: 2,
-      title: "Telegram Business → Чат-боты",
-      desc: "Найдите раздел «Telegram Business» и нажмите «Чат-боты» → «Добавить чат-бот».",
+      title: "Нажмите «Автоматизация чатов»",
+      desc: "Этот пункт есть у аккаунтов с Telegram Business или Premium. Откроется окно подключения бота.",
     },
     {
       n: 3,
-      title: botUsername ? `Найдите и выберите @${botUsername}` : "Введите username бота",
-      desc: "Найдите бота в поиске и выберите его. Настройте: Все личные чаты или только выбранные.",
+      title: botUsername ? `Введите @${botUsername}` : "Введите username бота",
+      desc: "Найдите бота в поиске и выберите его. Выберите режим: «Все личные чаты, кроме...» или «Только выбранные чаты».",
     },
     {
       n: 4,
