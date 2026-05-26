@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import {
@@ -608,8 +608,12 @@ function SettingsTab() {
   const [tone, setTone] = useState<AutomodSettingsTone>("professional");
   const [isEnabled, setIsEnabled] = useState(true);
 
+  // Initialize form from server data only once — prevents background refetches
+  // from overwriting changes the user has made but not yet saved.
+  const initialized = useRef(false);
   useEffect(() => {
-    if (settings) {
+    if (settings && !initialized.current) {
+      initialized.current = true;
       setAiName(settings.aiName);
       setSystemPrompt(settings.systemPrompt);
       setTone(settings.tone as AutomodSettingsTone);
@@ -632,7 +636,7 @@ function SettingsTab() {
     saveSettings.mutate(
       { aiName: aiName.trim(), systemPrompt, tone, isEnabled },
       {
-        onSuccess: () => toast({ title: "Настройки сохранены" }),
+        onSuccess: () => toast({ title: "✓ Настройки сохранены" }),
         onError: (e) => toast({ title: "Ошибка сохранения", description: String(e), variant: "destructive" }),
       }
     );
