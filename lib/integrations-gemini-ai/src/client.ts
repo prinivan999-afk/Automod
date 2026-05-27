@@ -45,7 +45,10 @@ const cleanModel = (model: string) => {
 
 // Helper for OpenAI-compatible proxy translation (OmniRoute, OpenRouter, etc.)
 async function callCustomProxy(params: any, stream: boolean = false) {
-  const model = params.model; // Keep model name exactly as defined in the request
+  let model = params.model;
+  if (model && model.startsWith("ag/")) {
+    model = "antigravity/" + model.slice(3);
+  }
 
   const messages = (params.contents || []).map((c: any) => ({
     role: c.role === "model" ? "assistant" : c.role,
