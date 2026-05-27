@@ -37,7 +37,9 @@ app.use("/api", router);
 // The static dir is relative to this compiled file: dist/ → ../../artifacts/crm-dashboard/dist/public
 if (process.env.NODE_ENV !== "development") {
   const __dirname = path.dirname(fileURLToPath(import.meta.url));
-  const staticDir = path.resolve(__dirname, "../../artifacts/crm-dashboard/dist/public");
+  // __dirname is /app/artifacts/api-server/dist
+  // Up two levels goes to /app/artifacts
+  const staticDir = path.resolve(__dirname, "../../crm-dashboard/dist/public");
   app.use(express.static(staticDir));
   // SPA fallback — any non-API path serves index.html
   app.use((_req, res) => {
