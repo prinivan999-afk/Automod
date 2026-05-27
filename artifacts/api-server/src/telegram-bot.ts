@@ -1007,6 +1007,7 @@ export async function startTelegramBot() {
         });
 
         const { botPrompt, priceList } = await getSellerSettings(seller.id);
+        try { await bot.sendChatAction(chatId, "typing"); } catch {}
         const greeting = await generateGreeting(botPrompt, priceList);
         await bot.sendMessage(chatId, greeting, {
           parse_mode: "Markdown",
@@ -1526,6 +1527,7 @@ export async function startTelegramBot() {
       }
 
       const { botPrompt, priceList } = await getSellerSettings(seller.id);
+      try { await bot.sendChatAction(chatId, "typing"); } catch {}
       const greetText = await generateGreeting(botPrompt, priceList);
 
       conv = await upsertConversation(chatId, {
@@ -1818,6 +1820,8 @@ export async function startTelegramBot() {
       { role: "model" as const, parts: [{ text: "Понял, буду следовать инструкциям и работать только по прайс-листу." }] },
       ...messages,
     ];
+
+    try { await bot.sendChatAction(chatId, "typing"); } catch {}
 
     const response = await ai.models.generateContent({
       model: "ag/gemini-2.5-flash",
