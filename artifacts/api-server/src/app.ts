@@ -35,7 +35,7 @@ app.use("/api", router);
 
 // In production (Railway / Replit deploy) serve the built Vite frontend.
 // The static dir is relative to this compiled file: dist/ → ../../artifacts/crm-dashboard/dist/public
-if (process.env.NODE_ENV === "production") {
+if (process.env.NODE_ENV !== "development") {
   const __dirname = path.dirname(fileURLToPath(import.meta.url));
   const staticDir = path.resolve(__dirname, "../../artifacts/crm-dashboard/dist/public");
   app.use(express.static(staticDir));
