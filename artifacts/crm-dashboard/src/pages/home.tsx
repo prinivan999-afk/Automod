@@ -45,8 +45,8 @@ const plans = [
     highlight: true,
     features: [
       "Всё из Базового",
-      "Telegram Business AutoMod",
-      "ИИ-автоответы в Business-чатах",
+      "Автоматизация чатов Telegram",
+      "ИИ ответчик в твоих личных чатах",
       "Управление чатами бота",
       "1 Business-аккаунт включён",
     ],
