@@ -8,6 +8,7 @@ export const usersTable = pgTable("users", {
   apiToken: text("api_token").notNull().unique(),
   telegramChatId: text("telegram_chat_id"),
   telegramUserId: text("telegram_user_id").unique(),
+  telegramBusinessConnectionId: text("telegram_business_connection_id").unique(),
   telegramUsernameVerified: boolean("telegram_username_verified").notNull().default(false),
   verificationCode: text("verification_code"),
   plan: text("plan", { enum: ["basic", "business"] }).notNull().default("basic"),

@@ -744,6 +744,7 @@ export async function startTelegramBot() {
         .values({
           userId: user?.id ?? null,
           businessConnectionId: conn.id,
+          ownerTelegramId: String(userId),
           name,
           username: conn.user?.username ?? null,
           isEnabled: true,
@@ -753,6 +754,7 @@ export async function startTelegramBot() {
           target: businessConnectionsTable.businessConnectionId,
           set: {
             userId: user?.id ?? null,
+            ownerTelegramId: String(userId),
             name,
             username: conn.user?.username ?? null,
             isEnabled: true,
@@ -788,6 +790,13 @@ export async function startTelegramBot() {
       .limit(1);
 
     if (!conn || !conn.isEnabled) return;
+
+    // Skip messages from the business owner (manager) — don't auto-reply to yourself
+    const senderId = String(msg.from?.id ?? "");
+    if (conn.ownerTelegramId && senderId === conn.ownerTelegramId) {
+      console.log(`[TelegramBot] Skipping owner message from ${senderId} in business chat`);
+      return;
+    }
 
     // Upsert chat info (scan)
     const chatTitle = msg.chat.title ?? msg.chat.first_name ?? msg.chat.username ?? null;

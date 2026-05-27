@@ -7,6 +7,7 @@ export const businessConnectionsTable = pgTable("business_connections", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").references(() => usersTable.id, { onDelete: "cascade" }),
   businessConnectionId: text("business_connection_id").notNull().unique(),
+  ownerTelegramId: text("owner_telegram_id"),
   name: text("name").notNull(),
   username: text("username"),
   isEnabled: boolean("is_enabled").notNull().default(true),
