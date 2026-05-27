@@ -1459,16 +1459,14 @@ export async function startTelegramBot() {
 
     let conv = await getConversation(chatId);
 
-    // Block commands only when NOT in waiting_seller — in that state
-    // the user might type /username as a shortcut for the seller lookup.
-    if (text.startsWith("/") && conv?.status !== "waiting_seller" && conv != null) return;
+    // Ignore all commands starting with '/' to prevent them from being treated as text/usernames.
+    if (text.startsWith("/")) return;
 
     if (!conv || conv.status === "waiting_seller") {
-      // Accept @username, /username, or plain username (word-only)
+      // Accept @username, or plain username (word-only)
       const rawText = text.trim();
       const extracted =
         rawText.match(/^@(\w+)$/)?.[1] ??          // @ohakol
-        rawText.match(/^\/(\w+)$/)?.[1] ??          // /ohakol (typed as command)
         rawText.match(/@(\w+)/)?.[1] ??             // embedded @ohakol in sentence
         (/^\w+$/.test(rawText) ? rawText : null);   // plain: ohakol
 
