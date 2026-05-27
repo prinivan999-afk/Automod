@@ -43,6 +43,8 @@ const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
 let activeBot: TelegramBot | null = null;
 
+const justVerifiedChats = new Map<string, number>();
+
 type BotMessage = { role: "user" | "model"; parts: Array<{ text: string }> };
 
 const DEFAULT_GREETING = "Здравствуйте! Я ваш дружелюбный AI-помощник. Чем могу помочь?";
@@ -924,6 +926,16 @@ export async function startTelegramBot() {
           .limit(1);
 
         if (alreadyVerified) {
+          const updatedAtTime = alreadyVerified.updatedAt ? new Date(alreadyVerified.updatedAt).getTime() : 0;
+          const timeSinceUpdate = Math.abs(Date.now() - updatedAtTime);
+          const localJustVerified = justVerifiedChats.get(chatId);
+          const timeSinceLocalVerify = localJustVerified ? (Date.now() - localJustVerified) : Infinity;
+
+          if (timeSinceUpdate < 15000 || timeSinceLocalVerify < 15000) {
+            console.log(`[TelegramBot] Skipping duplicate alreadyVerified message for chat ${chatId}. Just verified recently.`);
+            return;
+          }
+
           await bot.sendMessage(chatId,
             `✅ Ваш аккаунт *@${alreadyVerified.telegramUsername}* уже верифицирован.\n\nЗаявки будут приходить сюда.`,
             { parse_mode: "Markdown" }
@@ -965,6 +977,14 @@ export async function startTelegramBot() {
           verificationCode: null,
         })
         .where(eq(usersTable.id, userByCode.id));
+
+      const verifyTimestamp = Date.now();
+      justVerifiedChats.set(chatId, verifyTimestamp);
+      setTimeout(() => {
+        if (justVerifiedChats.get(chatId) === verifyTimestamp) {
+          justVerifiedChats.delete(chatId);
+        }
+      }, 15000);
 
       await bot.sendMessage(chatId,
         `✅ Аккаунт *@${realUsername}* успешно верифицирован!\n\n📩 Теперь покупатели смогут найти вас через бота, а новые заявки будут приходить сюда.`,
@@ -1232,12 +1252,28 @@ export async function startTelegramBot() {
         await bot.sendMessage(chatId, "❌ Не удалось получить ваш Telegram username. Установите username в настройках Telegram.");
         return;
       }
+
+      const localJustVerified = justVerifiedChats.get(chatId);
+      if (localJustVerified && Date.now() - localJustVerified < 15000) {
+        console.log(`[TelegramBot] Ignoring duplicate button verification for chat ${chatId}`);
+        return;
+      }
+
       await db.update(usersTable).set({
         telegramChatId: chatId,
         telegramUserId: realTelegramUserId,
         telegramUsernameVerified: true,
         telegramUsername: realUsername,
       }).where(eq(usersTable.id, user.id));
+
+      const verifyTimestamp = Date.now();
+      justVerifiedChats.set(chatId, verifyTimestamp);
+      setTimeout(() => {
+        if (justVerifiedChats.get(chatId) === verifyTimestamp) {
+          justVerifiedChats.delete(chatId);
+        }
+      }, 15000);
+
       await bot.sendMessage(
         chatId,
         `✅ Аккаунт *@${realUsername}* успешно верифицирован!\n\n📩 Новые заявки будут приходить в этот чат.`,
