@@ -1,8 +1,8 @@
 import { GoogleGenAI } from "@google/genai";
 
 const apiKey =
-  process.env.AI_INTEGRATIONS_GEMINI_API_KEY ??
-  process.env.GEMINI_API_KEY;
+  (process.env.AI_INTEGRATIONS_GEMINI_API_KEY ??
+  process.env.GEMINI_API_KEY)?.trim();
 
 if (!apiKey) {
   throw new Error(
@@ -12,7 +12,7 @@ if (!apiKey) {
   );
 }
 
-const baseUrl = process.env.AI_INTEGRATIONS_GEMINI_BASE_URL;
+const baseUrl = process.env.AI_INTEGRATIONS_GEMINI_BASE_URL?.trim();
 
 // Auto-detect production / cloud environment (like Railway)
 const isCloud = process.env.NODE_ENV === "production" || !!process.env.RAILWAY_STATIC_URL;
