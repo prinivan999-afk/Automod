@@ -30,8 +30,10 @@ const rawAi = new GoogleGenAI({
     : {}),
 });
 
-// Check if we should translate requests for OpenRouter (if baseUrl points to openrouter)
-const isOpenRouter = activeBaseUrl && activeBaseUrl.includes("openrouter.ai");
+// Any activeBaseUrl means we are using an OpenAI-compatible proxy (like OmniRoute or OpenRouter).
+// Since these proxies expect OpenAI-compatible format (like /chat/completions), we must intercept the calls
+// and translate them. Google GenAI SDK does not support OpenAI-compatible proxies out of the box.
+const isCustomProxy = !!activeBaseUrl;
 
 // Helper to clean up model names for direct Google API calls
 const cleanModel = (model: string) => {
@@ -41,11 +43,9 @@ const cleanModel = (model: string) => {
   return model;
 };
 
-// Helper for OpenRouter API translation
-async function callOpenRouter(params: any, stream: boolean = false) {
-  const model = params.model.replace(/^ag\//, "").replace(/^antigravity\//, "");
-  // OpenRouter expects google/gemini-2.5-flash instead of gemini-2.5-flash
-  const openRouterModel = model.includes("/") ? model : `google/${model}`;
+// Helper for OpenAI-compatible proxy translation (OmniRoute, OpenRouter, etc.)
+async function callCustomProxy(params: any, stream: boolean = false) {
+  const model = params.model; // Keep model name exactly as defined in the request
 
   const messages = (params.contents || []).map((c: any) => ({
     role: c.role === "model" ? "assistant" : c.role,
@@ -56,12 +56,10 @@ async function callOpenRouter(params: any, stream: boolean = false) {
     method: "POST",
     headers: {
       "Authorization": `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer": "https://automind.app",
-      "X-Title": "AutoMind"
+      "Content-Type": "application/json"
     },
     body: JSON.stringify({
-      model: openRouterModel,
+      model,
       messages,
       max_tokens: params.config?.maxOutputTokens,
       stream
@@ -70,7 +68,7 @@ async function callOpenRouter(params: any, stream: boolean = false) {
 
   if (!response.ok) {
     const errText = await response.text();
-    throw new Error(`OpenRouter error: ${response.status} - ${errText}`);
+    throw new Error(`Proxy error: ${response.status} - ${errText}`);
   }
 
   return response;
@@ -81,8 +79,8 @@ const originalGenerateContent = rawAi.models.generateContent.bind(rawAi.models);
 const originalGenerateContentStream = rawAi.models.generateContentStream.bind(rawAi.models);
 
 (rawAi.models as any).generateContent = async (params: any) => {
-  if (isOpenRouter) {
-    const res = await callOpenRouter(params, false);
+  if (isCustomProxy) {
+    const res = await callCustomProxy(params, false);
     const data = await res.json();
     return {
       text: data.choices?.[0]?.message?.content || ""
@@ -96,8 +94,8 @@ const originalGenerateContentStream = rawAi.models.generateContentStream.bind(ra
 };
 
 (rawAi.models as any).generateContentStream = async (params: any) => {
-  if (isOpenRouter) {
-    const res = await callOpenRouter(params, true);
+  if (isCustomProxy) {
+    const res = await callCustomProxy(params, true);
     const reader = res.body?.getReader();
     const decoder = new TextDecoder();
     
