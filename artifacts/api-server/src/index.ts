@@ -30,6 +30,11 @@ async function runMigrations() {
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_expires_at TIMESTAMPTZ`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_business_connection_id TEXT`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_username_verified BOOLEAN NOT NULL DEFAULT false`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS plan TEXT NOT NULL DEFAULT 'basic'`,
+    // business_connections table
+    `ALTER TABLE business_connections ADD COLUMN IF NOT EXISTS owner_telegram_id TEXT`,
   ];
 
   for (const migration of migrations) {
@@ -43,6 +48,14 @@ async function runMigrations() {
   try {
     await db.execute(sql`
       ALTER TABLE users ADD CONSTRAINT users_telegram_user_id_unique UNIQUE (telegram_user_id)
+    `);
+  } catch {
+    // constraint may already exist
+  }
+
+  try {
+    await db.execute(sql`
+      ALTER TABLE users ADD CONSTRAINT users_telegram_business_connection_id_unique UNIQUE (telegram_business_connection_id)
     `);
   } catch {
     // constraint may already exist
